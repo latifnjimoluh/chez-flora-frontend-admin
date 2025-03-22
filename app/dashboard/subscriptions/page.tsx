@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, Eye } from "lucide-react"
+import { ArrowUpDown, MoreHorizontal, Plus, Star, Image, Upload } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import {
@@ -13,215 +15,335 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu"
-import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Textarea } from "@/components/ui/textarea"
+import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { testimonialService } from "@/services/testimonialService"
 
-type Subscription = {
-  id_abonnement: number
-  id_client: number
-  type_abonnement: string
-  frequence: string
-  adresse_livraison: string | null
-  disponibilites: string | null
-  dates_ateliers: string | null
-  date_souscription: string
-  date_echeance: string | null
-  statut: "abonné" | "résilié" | "suspendu"
-  client_name?: string
+type Testimonial = {
+  id: number
+  name: string
+  text: string
+  rating: number
+  image: string | null
+  is_featured: boolean
+  created_at: string
 }
 
-const initialSubscriptions: Subscription[] = [
-  {
-    id_abonnement: 9,
-    id_client: 1,
-    type_abonnement: "Ateliers Floraux",
-    frequence: "Trimestriel",
-    adresse_livraison: "Adresse de livraison 1, Ville 1",
-    disponibilites: null,
-    dates_ateliers: "Chaque samedi matin",
-    date_souscription: "2024-04-26 15:32:05",
-    date_echeance: "2025-12-03 22:44:31",
-    statut: "abonné",
-    client_name: "Sophie Martin",
-  },
-  {
-    id_abonnement: 10,
-    id_client: 6,
-    type_abonnement: "Conseil en Décoration",
-    frequence: "Hebdomadaire",
-    adresse_livraison: "Adresse de livraison 2, Ville 2",
-    disponibilites: "Lundi et Mercredi après-midi",
-    dates_ateliers: null,
-    date_souscription: "2024-10-10 22:20:39",
-    date_echeance: "2025-12-04 21:23:17",
-    statut: "résilié",
-    client_name: "Thomas Dubois",
-  },
-  {
-    id_abonnement: 11,
-    id_client: 4,
-    type_abonnement: "Conseil en Décoration",
-    frequence: "Trimestriel",
-    adresse_livraison: "Adresse de livraison 3, Ville 3",
-    disponibilites: "Lundi et Mercredi après-midi",
-    dates_ateliers: null,
-    date_souscription: "2024-11-26 22:50:37",
-    date_echeance: "2025-09-03 05:40:52",
-    statut: "abonné",
-    client_name: "Marie Leroy",
-  },
-  {
-    id_abonnement: 12,
-    id_client: 8,
-    type_abonnement: "Floral",
-    frequence: "Hebdomadaire",
-    adresse_livraison: "Adresse de livraison 4, Ville 4",
-    disponibilites: null,
-    dates_ateliers: null,
-    date_souscription: "2024-10-03 01:15:16",
-    date_echeance: "2025-08-16 08:52:57",
-    statut: "suspendu",
-    client_name: "Jean Dupont",
-  },
-  {
-    id_abonnement: 13,
-    id_client: 15,
-    type_abonnement: "Ateliers Floraux",
-    frequence: "Trimestriel",
-    adresse_livraison: "Adresse de livraison 5, Ville 5",
-    disponibilites: null,
-    dates_ateliers: "Chaque samedi matin",
-    date_souscription: "2024-04-04 18:03:05",
-    date_echeance: "2025-06-28 12:48:09",
-    statut: "abonné",
-    client_name: "Camille Petit",
-  },
-]
+export default function TestimonialsPage() {
+  const [testimonials, setTestimonials] = useState<Testimonial[]>([])
+  const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
+  const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
+  const [isViewImageDialogOpen, setIsViewImageDialogOpen] = useState(false)
+  const [currentTestimonial, setCurrentTestimonial] = useState<Testimonial | null>(null)
+  const [newTestimonial, setNewTestimonial] = useState<Partial<Testimonial>>({
+    name: "",
+    text: "",
+    rating: 5,
+    image: null,
+    is_featured: false,
+  })
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
+  const { toast } = useToast()
 
-export default function SubscriptionsPage() {
-  const [subscriptions, setSubscriptions] = useState<Subscription[]>(initialSubscriptions);
-  const [isViewDialogOpen, setIsViewDialogOpen] = useState(false);
-  const [isEditStatusDialogOpen, setIsEditStatusDialogOpen] = useState(false);
-  const [currentSubscription, setCurrentSubscription] = useState<Subscription | null>(null);
-  const { toast } = useToast();
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const editFileInputRef = useRef<HTMLInputElement>(null)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [editSelectedFile, setEditSelectedFile] = useState<File | null>(null)
+  const [previewUrl, setPreviewUrl] = useState<string | null>(null)
+  const [editPreviewUrl, setEditPreviewUrl] = useState<string | null>(null)
 
-  const handleUpdateStatus = () => {
-    if (!currentSubscription) return;
-    
-    setSubscriptions(
-      subscriptions.map((subscription) => (subscription.id_abonnement === currentSubscription.id_abonnement ? currentSubscription : subscription))
-    );
-    setIsEditStatusDialogOpen(false);
-    
-    toast({
-      title: "Subscription status updated",
-      description: `Subscription status has been updated to ${currentSubscription.statut}.`,
-    });
-  };
+  useEffect(() => {
+    fetchTestimonials()
+  }, [])
 
-  const getStatusColor = (status: string) => {
-    switch (status) {
-      case "abonné":
-        return "bg-green-100 text-green-800";
-      case "résilié":
-        return "bg-red-100 text-red-800";
-      case "suspendu":
-        return "bg-yellow-100 text-yellow-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  const fetchTestimonials = async () => {
+    try {
+      setLoading(true)
+      const response = await testimonialService.getAllTestimonials()
+      if (response.success) {
+        setTestimonials(response.data)
+      } else {
+        throw new Error(response.message || "Failed to fetch testimonials")
+      }
+    } catch (error) {
+      console.error("Error fetching testimonials:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load testimonials. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-  };
+  }
 
-  const getTypeColor = (type: string) => {
-    switch (type) {
-      case "Floral":
-        return "bg-pink-100 text-pink-800";
-      case "Conseil en Décoration":
-        return "bg-purple-100 text-purple-800";
-      case "Ateliers Floraux":
-        return "bg-blue-100 text-blue-800";
-      default:
-        return "bg-gray-100 text-gray-800";
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>, isEdit = false) => {
+    const file = e.target.files?.[0] || null
+
+    if (file) {
+      const reader = new FileReader()
+      reader.onloadend = () => {
+        if (isEdit) {
+          setEditSelectedFile(file)
+          setEditPreviewUrl(reader.result as string)
+        } else {
+          setSelectedFile(file)
+          setPreviewUrl(reader.result as string)
+        }
+      }
+      reader.readAsDataURL(file)
+    } else {
+      if (isEdit) {
+        setEditSelectedFile(null)
+        setEditPreviewUrl(null)
+      } else {
+        setSelectedFile(null)
+        setPreviewUrl(null)
+      }
     }
-  };
+  }
 
-  const columns: ColumnDef<Subscription>[] = [
+  const handleAddTestimonial = async () => {
+    try {
+      setSubmitting(true)
+
+      const testimonialData = {
+        ...newTestimonial,
+        image: selectedFile || undefined,
+      }
+
+      const response = await testimonialService.createTestimonial(testimonialData)
+
+      if (response.success) {
+        await fetchTestimonials()
+        setIsAddDialogOpen(false)
+        setNewTestimonial({
+          name: "",
+          text: "",
+          rating: 5,
+          image: null,
+          is_featured: false,
+        })
+        setSelectedFile(null)
+        setPreviewUrl(null)
+
+        toast({
+          title: "Testimonial added",
+          description: `Testimonial from ${response.data.name} has been added successfully.`,
+        })
+      } else {
+        throw new Error(response.message || "Failed to add testimonial")
+      }
+    } catch (error) {
+      console.error("Error adding testimonial:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add testimonial. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEditTestimonial = async () => {
+    if (!currentTestimonial) return
+
+    try {
+      setSubmitting(true)
+
+      const testimonialData = {
+        ...currentTestimonial,
+        image: editSelectedFile || undefined,
+      }
+
+      const response = await testimonialService.updateTestimonial(currentTestimonial.id, testimonialData)
+
+      if (response.success) {
+        await fetchTestimonials()
+        setIsEditDialogOpen(false)
+        setEditSelectedFile(null)
+        setEditPreviewUrl(null)
+
+        toast({
+          title: "Testimonial updated",
+          description: `Testimonial from ${currentTestimonial.name} has been updated successfully.`,
+        })
+      } else {
+        throw new Error(response.message || "Failed to update testimonial")
+      }
+    } catch (error) {
+      console.error("Error updating testimonial:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update testimonial. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleDeleteTestimonial = async () => {
+    if (!currentTestimonial) return
+
+    try {
+      setSubmitting(true)
+
+      const response = await testimonialService.deleteTestimonial(currentTestimonial.id)
+
+      if (response.success) {
+        await fetchTestimonials()
+        setIsDeleteDialogOpen(false)
+
+        toast({
+          title: "Testimonial deleted",
+          description: `Testimonial has been deleted successfully.`,
+        })
+      } else {
+        throw new Error(response.message || "Failed to delete testimonial")
+      }
+    } catch (error) {
+      console.error("Error deleting testimonial:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete testimonial. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const toggleFeatured = async (id: number, isFeatured: boolean) => {
+    try {
+      const response = await testimonialService.toggleFeatured(id, !isFeatured)
+
+      if (response.success) {
+        await fetchTestimonials()
+
+        toast({
+          title: isFeatured ? "Removed from featured" : "Added to featured",
+          description: `Testimonial has been ${isFeatured ? "removed from" : "added to"} featured testimonials.`,
+        })
+      } else {
+        throw new Error(response.message || "Failed to update featured status")
+      }
+    } catch (error) {
+      console.error("Error toggling featured status:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update featured status. Please try again.",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const renderStars = (rating: number) => {
+    return Array(rating)
+      .fill(0)
+      .map((_, i) => <Star key={i} className="h-4 w-4 fill-yellow-400 text-yellow-400" />)
+  }
+
+  const columns: ColumnDef<Testimonial>[] = [
     {
-      accessorKey: "id_abonnement",
+      accessorKey: "id",
       header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
           ID
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
     },
     {
-      accessorKey: "client_name",
-      header: "Client",
+      accessorKey: "name",
+      header: "Name",
     },
     {
-      accessorKey: "type_abonnement",
-      header: "Type",
+      accessorKey: "text",
+      header: "Testimonial",
       cell: ({ row }) => {
-        const type = row.getValue("type_abonnement") as string;
-        return (
-          <Badge className={getTypeColor(type)}>
-            {type}
-          </Badge>
-        );
+        const text = row.getValue("text") as string
+        return <div className="max-w-xs truncate">{text}</div>
       },
     },
     {
-      accessorKey: "frequence",
-      header: "Frequency",
+      accessorKey: "rating",
+      header: "Rating",
+      cell: ({ row }) => {
+        const rating = row.getValue("rating") as number
+        return <div className="flex">{renderStars(rating)}</div>
+      },
     },
     {
-      accessorKey: "date_souscription",
+      accessorKey: "image",
+      header: "Image",
+      cell: ({ row }) => {
+        const image = row.getValue("image") as string | null
+        if (!image) return <div>No image</div>
+        return (
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setCurrentTestimonial(row.original)
+              setIsViewImageDialogOpen(true)
+            }}
+          >
+            <Image className="mr-2 h-4 w-4" />
+            View
+          </Button>
+        )
+      },
+    },
+    {
+      accessorKey: "is_featured",
+      header: "Featured",
+      cell: ({ row }) => {
+        const isFeatured = row.getValue("is_featured") as boolean
+        return (
+          <div
+            className={`rounded-full px-2 py-1 text-xs inline-block text-center ${
+              isFeatured ? "bg-amber-100 text-amber-800" : "bg-gray-100 text-gray-800"
+            }`}
+          >
+            {isFeatured ? "Featured" : "Not Featured"}
+          </div>
+        )
+      },
+    },
+    {
+      accessorKey: "created_at",
       header: ({ column }) => (
-        <Button
-          variant="ghost"
-          onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}
-        >
-          Start Date
+        <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
+          Date
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
       cell: ({ row }) => {
-        const date = row.getValue("date_souscription") as string;
-        return <div>{format(new Date(date), "PPP")}</div>;
-      },
-    },
-    {
-      accessorKey: "date_echeance",
-      header: "End Date",
-      cell: ({ row }) => {
-        const date = row.getValue("date_echeance") as string | null;
-        return <div>{date ? format(new Date(date), "PPP") : "-"}</div>;
-      },
-    },
-    {
-      accessorKey: "statut",
-      header: "Status",
-      cell: ({ row }) => {
-        const status = row.getValue("statut") as string;
-        return (
-          <Badge className={getStatusColor(status)}>
-            {status.charAt(0).toUpperCase() + status.slice(1)}
-          </Badge>
-        );
+        const date = row.getValue("created_at") as string
+        return <div>{format(new Date(date), "PPP")}</div>
       },
     },
     {
       id: "actions",
       cell: ({ row }) => {
-        const subscription = row.original;
-        
+        const testimonial = row.original
+
         return (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
@@ -235,123 +357,302 @@ export default function SubscriptionsPage() {
               <DropdownMenuSeparator />
               <DropdownMenuItem
                 onClick={() => {
-                  setCurrentSubscription(subscription);
-                  setIsViewDialogOpen(true);
+                  setCurrentTestimonial(testimonial)
+                  setEditPreviewUrl(testimonial.image)
+                  setIsEditDialogOpen(true)
                 }}
               >
-                <Eye className="mr-2 h-4 w-4" />
-                View Details
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => toggleFeatured(testimonial.id, testimonial.is_featured)}>
+                {testimonial.is_featured ? "Remove from Featured" : "Add to Featured"}
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
-                  setCurrentSubscription(subscription);
-                  setIsEditStatusDialogOpen(true);
+                  setCurrentTestimonial(testimonial)
+                  setIsDeleteDialogOpen(true)
                 }}
+                className="text-red-600"
               >
-                Update Status
+                Delete
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        );
+        )
       },
     },
-  ];
+  ]
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-bold">Subscriptions</h1>
-        <p className="text-muted-foreground">Manage customer subscriptions</p>
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-3xl font-bold">Testimonials</h1>
+          <p className="text-muted-foreground">Manage customer testimonials</p>
+        </div>
+        <Button onClick={() => setIsAddDialogOpen(true)}>
+          <Plus className="mr-2 h-4 w-4" />
+          Add Testimonial
+        </Button>
       </div>
 
-      <div className="flex items-center space-x-4 bg-muted/50 p-4 rounded-lg">
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-green-100 text-green-800">Active</Badge>
-          <span className="text-sm font-medium">{subscriptions.filter(s => s.statut === "abonné").length}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-yellow-100 text-yellow-800">Suspended</Badge>
-          <span className="text-sm font-medium">{subscriptions.filter(s => s.statut === "suspendu").length}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-red-100 text-red-800">Cancelled</Badge>
-          <span className="text-sm font-medium">{subscriptions.filter(s => s.statut === "résilié").length}</span>
-        </div>
-      </div>
+      <DataTable columns={columns} data={testimonials} searchColumn="name" searchPlaceholder="Search by name..." />
 
-      <DataTable 
-        columns={columns} 
-        data={subscriptions} 
-        searchColumn="client_name"
-        searchPlaceholder="Search by client name..."
-      />
-
-      {/* View Subscription Details Dialog */}
-      <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
-        <DialogContent className="sm:max-w-[600px]">
+      {/* Add Testimonial Dialog */}
+      <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
           <DialogHeader>
-            <DialogTitle>Subscription Details</DialogTitle>
+            <DialogTitle>Add New Testimonial</DialogTitle>
+            <DialogDescription>Add a new customer testimonial. Click save when you're done.</DialogDescription>
+          </DialogHeader>
+          <div className="grid gap-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="name">Customer Name</Label>
+              <Input
+                id="name"
+                value={newTestimonial.name}
+                onChange={(e) => setNewTestimonial({ ...newTestimonial, name: e.target.value })}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="text">Testimonial Text</Label>
+              <Textarea
+                id="text"
+                value={newTestimonial.text}
+                onChange={(e) => setNewTestimonial({ ...newTestimonial, text: e.target.value })}
+                className="min-h-[100px]"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="rating">Rating (1-5)</Label>
+              <Input
+                id="rating"
+                type="number"
+                min="1"
+                max="5"
+                value={newTestimonial.rating}
+                onChange={(e) => setNewTestimonial({ ...newTestimonial, rating: Number.parseInt(e.target.value) })}
+              />
+              <div className="flex mt-1">{renderStars(newTestimonial.rating || 5)}</div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="image">Image</Label>
+              <div className="flex items-center gap-2">
+                <Input
+                  id="image"
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  ref={fileInputRef}
+                  onChange={(e) => handleFileChange(e)}
+                />
+                <Button type="button" variant="outline" onClick={() => fileInputRef.current?.click()}>
+                  <Upload className="mr-2 h-4 w-4" />
+                  Upload Image
+                </Button>
+                {selectedFile && <span className="text-sm text-muted-foreground">{selectedFile.name}</span>}
+              </div>
+              {previewUrl && (
+                <div className="mt-2">
+                  <p className="text-sm font-medium mb-1">Preview:</p>
+                  <img
+                    src={previewUrl || "/placeholder.svg"}
+                    alt="Preview"
+                    className="max-h-[200px] rounded-md border"
+                  />
+                </div>
+              )}
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="is_featured"
+                checked={newTestimonial.is_featured}
+                onCheckedChange={(checked) => setNewTestimonial({ ...newTestimonial, is_featured: checked as boolean })}
+              />
+              <Label htmlFor="is_featured">Featured Testimonial</Label>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleAddTestimonial} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Testimonial Dialog */}
+      <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Edit Testimonial</DialogTitle>
+            <DialogDescription>Update testimonial information. Click save when you're done.</DialogDescription>
+          </DialogHeader>
+          {currentTestimonial && (
+            <div className="grid gap-4 py-4">
+              <div className="space-y-2">
+                <Label htmlFor="edit_name">Customer Name</Label>
+                <Input
+                  id="edit_name"
+                  value={currentTestimonial.name}
+                  onChange={(e) => setCurrentTestimonial({ ...currentTestimonial, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_text">Testimonial Text</Label>
+                <Textarea
+                  id="edit_text"
+                  value={currentTestimonial.text}
+                  onChange={(e) => setCurrentTestimonial({ ...currentTestimonial, text: e.target.value })}
+                  className="min-h-[100px]"
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_rating">Rating (1-5)</Label>
+                <Input
+                  id="edit_rating"
+                  type="number"
+                  min="1"
+                  max="5"
+                  value={currentTestimonial.rating}
+                  onChange={(e) =>
+                    setCurrentTestimonial({ ...currentTestimonial, rating: Number.parseInt(e.target.value) })
+                  }
+                />
+                <div className="flex mt-1">{renderStars(currentTestimonial.rating)}</div>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="edit_image">Image</Label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    id="edit_image"
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    ref={editFileInputRef}
+                    onChange={(e) => handleFileChange(e, true)}
+                  />
+                  <Button type="button" variant="outline" onClick={() => editFileInputRef.current?.click()}>
+                    <Upload className="mr-2 h-4 w-4" />
+                    Change Image
+                  </Button>
+                  {editSelectedFile && <span className="text-sm text-muted-foreground">{editSelectedFile.name}</span>}
+                </div>
+                {(editPreviewUrl || currentTestimonial.image) && (
+                  <div className="mt-2">
+                    <p className="text-sm font-medium mb-1">Preview:</p>
+                    <img
+                      src={editPreviewUrl || currentTestimonial.image || "/placeholder.svg"}
+                      alt="Preview"
+                      className="max-h-[200px] rounded-md border"
+                    />
+                  </div>
+                )}
+              </div>
+              <div className="flex items-center space-x-2">
+                <Checkbox
+                  id="edit_is_featured"
+                  checked={currentTestimonial.is_featured}
+                  onCheckedChange={(checked) =>
+                    setCurrentTestimonial({ ...currentTestimonial, is_featured: checked as boolean })
+                  }
+                />
+                <Label htmlFor="edit_is_featured">Featured Testimonial</Label>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button onClick={handleEditTestimonial} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Testimonial Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Testimonial</DialogTitle>
             <DialogDescription>
-              Subscription #{currentSubscription?.id_abonnement}
+              Are you sure you want to delete this testimonial? This action cannot be undone.
             </DialogDescription>
           </DialogHeader>
-          {currentSubscription && (
-            <div className="space-y-6">
-              <div className="grid grid-cols-2 gap-6">
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Client Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div>
-                      <div className="font-medium">Name</div>
-                      <div>{currentSubscription.client_name}</div>
-                    </div>
-                    <div>
-                      <div className="font-medium">Client ID</div>
-                      <div>{currentSubscription.id_client}</div>
-                    </div>
-                  </CardContent>
-                </Card>
-                
-                <Card>
-                  <CardHeader>
-                    <CardTitle className="text-lg">Subscription Information</CardTitle>
-                  </CardHeader>
-                  <CardContent className="space-y-2">
-                    <div>
-                      <div className="font-medium">Type</div>
-                      <Badge className={getTypeColor(currentSubscription.type_abonnement)}>
-                        {currentSubscription.type_abonnement}
-                      </Badge>
-                    </div>
-                    <div>
-                      <div className="font-medium">Frequency</div>
-                      <div>{currentSubscription.frequence}</div>
-                    </div>
-                    <div>
-                      <div className="font-medium">Status</div>
-                      <Badge className={getStatusColor(currentSubscription.statut)}>
-                        {currentSubscription.statut.charAt(0).toUpperCase() + currentSubscription.statut.slice(1)}
-                      </Badge>
-                    </div>
-                  </CardContent>
-                </Card>
-              </div>
-              
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Subscription Details</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-4">
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <div className="font-medium">Start Date</div>
-                      <div>{format(new Date(currentSubscription.date_souscription), "PPP")}</div>
-                    </div>
-                    <div>
-                      <div className="font-medium">End Date</div>
-                      <div>
-                        {currentSubscription.date_echeance 
-                          ? format(new Date(currentSubsc\
+          {currentTestimonial && (
+            <div className="py-4">
+              <p>
+                You are about to delete testimonial from: <strong>{currentTestimonial.name}</strong>
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">"{currentTestimonial.text.substring(0, 100)}..."</p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={submitting}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteTestimonial} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* View Image Dialog */}
+      <Dialog open={isViewImageDialogOpen} onOpenChange={setIsViewImageDialogOpen}>
+        <DialogContent className="sm:max-w-[500px]">
+          <DialogHeader>
+            <DialogTitle>Testimonial Image</DialogTitle>
+            <DialogDescription>{currentTestimonial?.name}'s testimonial image</DialogDescription>
+          </DialogHeader>
+          {currentTestimonial && currentTestimonial.image && (
+            <div className="py-4 flex justify-center">
+              <img
+                src={currentTestimonial.image || "/placeholder.svg"}
+                alt={`${currentTestimonial.name}'s testimonial`}
+                className="max-h-[300px] rounded-md"
+              />
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setIsViewImageDialogOpen(false)}>Close</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  )
+}
 
