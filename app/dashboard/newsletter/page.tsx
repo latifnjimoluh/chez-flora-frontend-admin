@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown, MoreHorizontal, Mail, Download } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -24,89 +24,80 @@ import {
 import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
 import { format } from "date-fns"
-
-type Subscriber = {
-  id: number
-  email: string
-  status: "active" | "unsubscribed"
-  created_at: string
-  updated_at: string
-}
-
-const initialSubscribers: Subscriber[] = [
-  {
-    id: 1,
-    email: "latifnjimoluh@gmail.com",
-    status: "active",
-    created_at: "2025-03-18 15:32:41",
-    updated_at: "2025-03-18 15:32:41",
-  },
-  {
-    id: 2,
-    email: "sophie.martin@example.com",
-    status: "active",
-    created_at: "2025-03-10 09:15:22",
-    updated_at: "2025-03-10 09:15:22",
-  },
-  {
-    id: 3,
-    email: "thomas.dubois@example.com",
-    status: "active",
-    created_at: "2025-03-11 14:22:05",
-    updated_at: "2025-03-11 14:22:05",
-  },
-  {
-    id: 4,
-    email: "marie.leroy@example.com",
-    status: "unsubscribed",
-    created_at: "2025-03-05 11:45:30",
-    updated_at: "2025-03-15 16:30:12",
-  },
-  {
-    id: 5,
-    email: "jean.dupont@example.com",
-    status: "active",
-    created_at: "2025-03-12 08:10:45",
-    updated_at: "2025-03-12 08:10:45",
-  },
-]
+import newsletterService, { type NewsletterSubscriber } from "@/services/newsletterService"
 
 export default function NewsletterPage() {
-  const [subscribers, setSubscribers] = useState<Subscriber[]>(initialSubscribers)
+  const [subscribers, setSubscribers] = useState<NewsletterSubscriber[]>([])
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
-  const [currentSubscriber, setCurrentSubscriber] = useState<Subscriber | null>(null)
+  const [currentSubscriber, setCurrentSubscriber] = useState<NewsletterSubscriber | null>(null)
+  const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
-  const handleDeleteSubscriber = () => {
-    if (!currentSubscriber) return
+  useEffect(() => {
+    fetchSubscribers()
+  }, [])
 
-    setSubscribers(subscribers.filter((subscriber) => subscriber.id !== currentSubscriber.id))
-    setIsDeleteDialogOpen(false)
-
-    toast({
-      title: "Subscriber deleted",
-      description: `${currentSubscriber.email} has been removed from the newsletter list.`,
-    })
+  const fetchSubscribers = async () => {
+    setIsLoading(true)
+    try {
+      const data = await newsletterService.getAllSubscribers()
+      setSubscribers(data)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch subscribers",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
+    }
   }
 
-  const toggleStatus = (id: number) => {
-    setSubscribers(
-      subscribers.map((subscriber) =>
-        subscriber.id === id
-          ? {
-              ...subscriber,
-              status: subscriber.status === "active" ? "unsubscribed" : "active",
-              updated_at: new Date().toISOString().replace("T", " ").substring(0, 19),
-            }
-          : subscriber,
-      ),
-    )
+  const handleDeleteSubscriber = async () => {
+    if (!currentSubscriber || !currentSubscriber.id) return
 
-    const subscriber = subscribers.find((s) => s.id === id)
-    if (subscriber) {
+    try {
+      await newsletterService.deleteSubscriber(currentSubscriber.id)
+
+      setSubscribers(subscribers.filter((subscriber) => subscriber.id !== currentSubscriber.id))
+      setIsDeleteDialogOpen(false)
+
       toast({
-        title: subscriber.status === "active" ? "Subscriber unsubscribed" : "Subscriber activated",
-        description: `${subscriber.email} has been ${subscriber.status === "active" ? "unsubscribed" : "reactivated"}.`,
+        title: "Subscriber deleted",
+        description: `${currentSubscriber.email} has been removed from the newsletter list.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete subscriber",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const toggleStatus = async (id: number, currentStatus: string) => {
+    try {
+      const newStatus = currentStatus === "active" ? "unsubscribed" : "active"
+      await newsletterService.updateSubscriberStatus(id, newStatus as "active" | "unsubscribed")
+
+      setSubscribers(
+        subscribers.map((subscriber) =>
+          subscriber.id === id ? { ...subscriber, status: newStatus as "active" | "unsubscribed" } : subscriber,
+        ),
+      )
+
+      const subscriber = subscribers.find((s) => s.id === id)
+      if (subscriber) {
+        toast({
+          title: currentStatus === "active" ? "Subscriber unsubscribed" : "Subscriber activated",
+          description: `${subscriber.email} has been ${currentStatus === "active" ? "unsubscribed" : "reactivated"}.`,
+        })
+      }
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update subscriber status",
+        variant: "destructive",
       })
     }
   }
@@ -140,7 +131,7 @@ export default function NewsletterPage() {
     })
   }
 
-  const columns: ColumnDef<Subscriber>[] = [
+  const columns: ColumnDef<NewsletterSubscriber>[] = [
     {
       accessorKey: "id",
       header: ({ column }) => (
@@ -176,7 +167,7 @@ export default function NewsletterPage() {
       ),
       cell: ({ row }) => {
         const date = row.getValue("created_at") as string
-        return <div>{format(new Date(date), "PPP")}</div>
+        return <div>{date ? format(new Date(date), "PPP") : "-"}</div>
       },
     },
     {
@@ -184,7 +175,7 @@ export default function NewsletterPage() {
       header: "Last Updated",
       cell: ({ row }) => {
         const date = row.getValue("updated_at") as string
-        return <div>{format(new Date(date), "PPP")}</div>
+        return <div>{date ? format(new Date(date), "PPP") : "-"}</div>
       },
     },
     {
@@ -203,7 +194,7 @@ export default function NewsletterPage() {
             <DropdownMenuContent align="end">
               <DropdownMenuLabel>Actions</DropdownMenuLabel>
               <DropdownMenuSeparator />
-              <DropdownMenuItem onClick={() => toggleStatus(subscriber.id)}>
+              <DropdownMenuItem onClick={() => toggleStatus(subscriber.id!, subscriber.status)}>
                 {subscriber.status === "active" ? "Unsubscribe" : "Reactivate"}
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -243,7 +234,13 @@ export default function NewsletterPage() {
         </p>
       </div>
 
-      <DataTable columns={columns} data={subscribers} searchColumn="email" searchPlaceholder="Search by email..." />
+      <DataTable
+        columns={columns}
+        data={subscribers}
+        searchColumn="email"
+        searchPlaceholder="Search by email..."
+        isLoading={isLoading}
+      />
 
       {/* Delete Subscriber Dialog */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>

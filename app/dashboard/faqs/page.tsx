@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { MoreHorizontal, Plus, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -28,108 +28,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
 import { Badge } from "@/components/ui/badge"
-
-type FAQ = {
-  id: number
-  question: string
-  answer: string
-  category: string
-  display_order: number
-  is_active: boolean
-  created_at: string
-  updated_at: string
-}
-
-const initialFAQs: FAQ[] = [
-  {
-    id: 1,
-    question: "Quels sont vos délais de livraison ?",
-    answer:
-      "Nous livrons à Paris et sa banlieue le jour même pour toute commande passée avant 14h. Pour les autres régions, le délai est généralement de 24 à 48h.",
-    category: "livraison",
-    display_order: 1,
-    is_active: true,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 2,
-    question: "Comment puis-je suivre ma commande ?",
-    answer:
-      "Vous recevrez un email de confirmation avec un numéro de suivi dès que votre commande sera expédiée. Vous pouvez également suivre votre commande dans votre espace client.",
-    category: "commande",
-    display_order: 2,
-    is_active: true,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 3,
-    question: "Puis-je modifier ou annuler ma commande ?",
-    answer:
-      "Vous pouvez modifier ou annuler votre commande jusqu'à 24h avant la date de livraison prévue. Contactez-nous par téléphone ou par email pour toute modification.",
-    category: "commande",
-    display_order: 3,
-    is_active: true,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 4,
-    question: "Proposez-vous des services pour les entreprises ?",
-    answer:
-      "Oui, nous proposons des services d'abonnement floral et de décoration pour les entreprises. Contactez-nous pour obtenir un devis personnalisé.",
-    category: "services",
-    display_order: 4,
-    is_active: true,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 9,
-    question: "Comment entretenir mon bouquet ?",
-    answer:
-      "Pour prolonger la durée de vie de votre bouquet, changez l'eau tous les deux jours, coupez les tiges en biseau et gardez-le à l'abri du soleil direct et des courants d'air.",
-    category: "entretien",
-    display_order: 5,
-    is_active: true,
-    created_at: "2025-03-18 02:55:32",
-    updated_at: "2025-03-18 02:55:32",
-  },
-  {
-    id: 10,
-    question: "Proposez-vous des ateliers floraux ?",
-    answer:
-      "Oui, nous organisons régulièrement des ateliers floraux pour apprendre à créer vos propres compositions. Consultez notre calendrier d'événements pour connaître les prochaines dates.",
-    category: "services",
-    display_order: 6,
-    is_active: true,
-    created_at: "2025-03-18 02:55:32",
-    updated_at: "2025-03-18 02:55:32",
-  },
-  {
-    id: 11,
-    question: "Quelles méthodes de paiement acceptez-vous ?",
-    answer:
-      "Nous acceptons les cartes de crédit (Visa, Mastercard), PayPal, et les virements bancaires pour les commandes importantes.",
-    category: "paiement",
-    display_order: 7,
-    is_active: true,
-    created_at: "2025-03-18 02:55:32",
-    updated_at: "2025-03-18 02:55:32",
-  },
-  {
-    id: 12,
-    question: "Puis-je personnaliser ma commande ?",
-    answer:
-      "Absolument ! Nous pouvons personnaliser votre bouquet selon vos préférences de couleurs, de fleurs et de style. N'hésitez pas à nous contacter pour discuter de vos besoins spécifiques.",
-    category: "commande",
-    display_order: 8,
-    is_active: true,
-    created_at: "2025-03-18 02:55:32",
-    updated_at: "2025-03-18 02:55:32",
-  },
-]
+import faqService, { type FAQ } from "@/services/faqService"
 
 const categories = [
   { value: "general", label: "Général" },
@@ -141,7 +40,7 @@ const categories = [
 ]
 
 export default function FAQsPage() {
-  const [faqs, setFaqs] = useState<FAQ[]>(initialFAQs)
+  const [faqs, setFaqs] = useState<FAQ[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -153,109 +52,156 @@ export default function FAQsPage() {
     display_order: 0,
     is_active: true,
   })
+  const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
-  const handleAddFAQ = () => {
-    const id = Math.max(...faqs.map((faq) => faq.id)) + 1
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
+  useEffect(() => {
+    fetchFAQs()
+  }, [])
 
-    const faq: FAQ = {
-      id,
-      question: newFAQ.question || "",
-      answer: newFAQ.answer || "",
-      category: newFAQ.category || "general",
-      display_order: newFAQ.display_order || faqs.length + 1,
-      is_active: newFAQ.is_active !== undefined ? newFAQ.is_active : true,
-      created_at: now,
-      updated_at: now,
+  const fetchFAQs = async () => {
+    setIsLoading(true)
+    try {
+      const data = await faqService.getAllFaqs()
+      setFaqs(data)
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to fetch FAQs",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    setFaqs([...faqs, faq])
-    setNewFAQ({
-      question: "",
-      answer: "",
-      category: "general",
-      display_order: 0,
-      is_active: true,
-    })
-    setIsAddDialogOpen(false)
-
-    toast({
-      title: "FAQ added",
-      description: "The FAQ has been added successfully.",
-    })
   }
 
-  const handleEditFAQ = () => {
+  const handleAddFAQ = async () => {
+    try {
+      const faqData: FAQ = {
+        question: newFAQ.question || "",
+        answer: newFAQ.answer || "",
+        category: newFAQ.category || "general",
+        display_order: newFAQ.display_order || faqs.length + 1,
+        is_active: newFAQ.is_active !== undefined ? newFAQ.is_active : true,
+      }
+
+      const createdFAQ = await faqService.createFaq(faqData)
+
+      setFaqs([...faqs, createdFAQ])
+      setNewFAQ({
+        question: "",
+        answer: "",
+        category: "general",
+        display_order: 0,
+        is_active: true,
+      })
+      setIsAddDialogOpen(false)
+
+      toast({
+        title: "FAQ added",
+        description: "The FAQ has been added successfully.",
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to add FAQ",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleEditFAQ = async () => {
     if (!currentFAQ) return
 
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
-    const updatedFAQ = {
-      ...currentFAQ,
-      updated_at: now,
+    try {
+      const updatedFAQ = await faqService.updateFaq(currentFAQ.id!, currentFAQ)
+
+      setFaqs(faqs.map((faq) => (faq.id === currentFAQ.id ? updatedFAQ : faq)))
+      setIsEditDialogOpen(false)
+
+      toast({
+        title: "FAQ updated",
+        description: "The FAQ has been updated successfully.",
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to update FAQ",
+        variant: "destructive",
+      })
     }
-
-    setFaqs(faqs.map((faq) => (faq.id === currentFAQ.id ? updatedFAQ : faq)))
-    setIsEditDialogOpen(false)
-
-    toast({
-      title: "FAQ updated",
-      description: "The FAQ has been updated successfully.",
-    })
   }
 
-  const handleDeleteFAQ = () => {
+  const handleDeleteFAQ = async () => {
     if (!currentFAQ) return
 
-    setFaqs(faqs.filter((faq) => faq.id !== currentFAQ.id))
-    setIsDeleteDialogOpen(false)
+    try {
+      await faqService.deleteFaq(currentFAQ.id!)
 
-    toast({
-      title: "FAQ deleted",
-      description: "The FAQ has been deleted successfully.",
-    })
+      setFaqs(faqs.filter((faq) => faq.id !== currentFAQ.id))
+      setIsDeleteDialogOpen(false)
+
+      toast({
+        title: "FAQ deleted",
+        description: "The FAQ has been deleted successfully.",
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to delete FAQ",
+        variant: "destructive",
+      })
+    }
   }
 
-  const moveOrder = (id: number, direction: "up" | "down") => {
+  const moveOrder = async (id: number, direction: "up" | "down") => {
     const faqIndex = faqs.findIndex((faq) => faq.id === id)
     if (faqIndex === -1) return
 
-    const newFaqs = [...faqs]
+    try {
+      let newOrder: number
 
-    if (direction === "up" && faqIndex > 0) {
-      // Swap with the previous item
-      const temp = newFaqs[faqIndex].display_order
-      newFaqs[faqIndex].display_order = newFaqs[faqIndex - 1].display_order
-      newFaqs[faqIndex - 1].display_order = temp
+      if (direction === "up" && faqIndex > 0) {
+        newOrder = faqs[faqIndex - 1].display_order!
+      } else if (direction === "down" && faqIndex < faqs.length - 1) {
+        newOrder = faqs[faqIndex + 1].display_order!
+      } else {
+        return
+      }
 
-      // Also swap the items in the array for immediate visual feedback
-      ;[newFaqs[faqIndex], newFaqs[faqIndex - 1]] = [newFaqs[faqIndex - 1], newFaqs[faqIndex]]
-    } else if (direction === "down" && faqIndex < newFaqs.length - 1) {
-      // Swap with the next item
-      const temp = newFaqs[faqIndex].display_order
-      newFaqs[faqIndex].display_order = newFaqs[faqIndex + 1].display_order
-      newFaqs[faqIndex + 1].display_order = temp
+      const updatedFAQ = await faqService.updateFaqOrder(id, newOrder)
 
-      // Also swap the items in the array for immediate visual feedback
-      ;[newFaqs[faqIndex], newFaqs[faqIndex + 1]] = [newFaqs[faqIndex + 1], newFaqs[faqIndex]]
+      // Refresh the list to get the updated order
+      await fetchFAQs()
+
+      toast({
+        title: "Order updated",
+        description: `FAQ moved ${direction}.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || `Failed to move FAQ ${direction}`,
+        variant: "destructive",
+      })
     }
-
-    setFaqs(newFaqs)
-
-    toast({
-      title: "Order updated",
-      description: `FAQ moved ${direction}.`,
-    })
   }
 
-  const toggleActive = (id: number) => {
-    setFaqs(faqs.map((faq) => (faq.id === id ? { ...faq, is_active: !faq.is_active } : faq)))
+  const toggleActive = async (id: number, isActive: boolean) => {
+    try {
+      await faqService.toggleFaqStatus(id, !isActive)
 
-    const faq = faqs.find((f) => f.id === id)
-    if (faq) {
+      setFaqs(faqs.map((faq) => (faq.id === id ? { ...faq, is_active: !isActive } : faq)))
+
       toast({
-        title: faq.is_active ? "FAQ deactivated" : "FAQ activated",
-        description: `The FAQ has been ${faq.is_active ? "deactivated" : "activated"}.`,
+        title: isActive ? "FAQ deactivated" : "FAQ activated",
+        description: `The FAQ has been ${isActive ? "deactivated" : "activated"}.`,
+      })
+    } catch (error: any) {
+      toast({
+        title: "Error",
+        description: error.message || "Failed to toggle FAQ status",
+        variant: "destructive",
       })
     }
   }
@@ -282,8 +228,8 @@ export default function FAQsPage() {
       accessorKey: "display_order",
       header: "Order",
       cell: ({ row }) => {
-        const order = Number.parseInt(row.getValue("display_order"))
-        const id = row.original.id
+        const order = Number.parseInt(row.getValue("display_order") as string)
+        const id = row.original.id!
 
         return (
           <div className="flex items-center space-x-2">
@@ -370,7 +316,7 @@ export default function FAQsPage() {
               >
                 Edit
               </DropdownMenuItem>
-              <DropdownMenuItem onClick={() => toggleActive(faq.id)}>
+              <DropdownMenuItem onClick={() => toggleActive(faq.id!, faq.is_active!)}>
                 {faq.is_active ? "Deactivate" : "Activate"}
               </DropdownMenuItem>
               <DropdownMenuItem
@@ -402,7 +348,13 @@ export default function FAQsPage() {
         </Button>
       </div>
 
-      <DataTable columns={columns} data={faqs} searchColumn="question" searchPlaceholder="Search by question..." />
+      <DataTable
+        columns={columns}
+        data={faqs}
+        searchColumn="question"
+        searchPlaceholder="Search by question..."
+        isLoading={isLoading}
+      />
 
       {/* Add FAQ Dialog */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>

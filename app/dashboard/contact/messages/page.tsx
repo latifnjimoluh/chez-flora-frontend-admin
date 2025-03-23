@@ -1,8 +1,8 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, Eye, Mail, Check, Archive } from "lucide-react"
+import { ArrowUpDown, MoreHorizontal, Eye, Reply } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import {
@@ -21,13 +21,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog"
-import { useToast } from "@/hooks/use-toast"
-import { Badge } from "@/components/ui/badge"
-import { format } from "date-fns"
-import { Textarea } from "@/components/ui/textarea"
 import { Label } from "@/components/ui/label"
-import { Input } from "@/components/ui/input"
-import { Card, CardContent } from "@/components/ui/card"
+import { Textarea } from "@/components/ui/textarea"
+import { useToast } from "@/hooks/use-toast"
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
+import { Separator } from "@/components/ui/separator"
+import { contactMessageService } from "@/services/contactMessageService"
 
 type ContactMessage = {
   id: number
@@ -41,56 +40,6 @@ type ContactMessage = {
   updated_at: string
 }
 
-const initialMessages: ContactMessage[] = [
-  {
-    id: 1,
-    name: "Latif",
-    email: "latifnjimoluh@gmail.com",
-    phone: "658509963",
-    subject: "service",
-    message: "jiuty",
-    status: "new",
-    created_at: "2025-03-18 02:40:02",
-    updated_at: "2025-03-18 02:40:02",
-  },
-  {
-    id: 2,
-    name: "Sophie Martin",
-    email: "sophie.martin@example.com",
-    phone: "0123456789",
-    subject: "information",
-    message:
-      "Bonjour, j'aimerais savoir si vous proposez des livraisons le dimanche. Merci d'avance pour votre réponse.",
-    status: "read",
-    created_at: "2025-03-17 14:22:15",
-    updated_at: "2025-03-17 15:30:45",
-  },
-  {
-    id: 3,
-    name: "Thomas Dubois",
-    email: "thomas.dubois@example.com",
-    phone: "0687654321",
-    subject: "commande",
-    message:
-      "Bonjour, je n'ai toujours pas reçu ma commande #12345 passée il y a 3 jours. Pouvez-vous me donner des informations sur sa livraison ?",
-    status: "replied",
-    created_at: "2025-03-16 09:15:30",
-    updated_at: "2025-03-16 11:45:22",
-  },
-  {
-    id: 4,
-    name: "Marie Leroy",
-    email: "marie.leroy@example.com",
-    phone: null,
-    subject: "reclamation",
-    message:
-      "Bonjour, j'ai reçu mon bouquet aujourd'hui mais plusieurs fleurs étaient abîmées. J'aimerais un remboursement ou un remplacement. Merci.",
-    status: "archived",
-    created_at: "2025-03-15 16:40:10",
-    updated_at: "2025-03-15 18:20:05",
-  },
-]
-
 const subjectLabels: Record<string, string> = {
   information: "Demande d'information",
   commande: "Question sur une commande",
@@ -100,69 +49,151 @@ const subjectLabels: Record<string, string> = {
 }
 
 export default function ContactMessagesPage() {
-  const [messages, setMessages] = useState<ContactMessage[]>(initialMessages)
+  const [messages, setMessages] = useState<ContactMessage[]>([])
   const [isViewDialogOpen, setIsViewDialogOpen] = useState(false)
   const [isReplyDialogOpen, setIsReplyDialogOpen] = useState(false)
+  const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
   const [currentMessage, setCurrentMessage] = useState<ContactMessage | null>(null)
-  const [replyText, setReplyText] = useState("")
+  const [replyContent, setReplyContent] = useState("")
+  const [isLoading, setIsLoading] = useState(true)
   const { toast } = useToast()
 
-  const updateMessageStatus = (id: number, status: "new" | "read" | "replied" | "archived") => {
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
+  useEffect(() => {
+    fetchMessages()
+  }, [])
 
-    setMessages(messages.map((message) => (message.id === id ? { ...message, status, updated_at: now } : message)))
-
-    const statusMessages = {
-      new: "marked as new",
-      read: "marked as read",
-      replied: "marked as replied",
-      archived: "archived",
+  const fetchMessages = async () => {
+    setIsLoading(true)
+    try {
+      const response = await contactMessageService.getAllMessages()
+      if (response.success) {
+        setMessages(response.data)
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to fetch messages",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while fetching messages",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    toast({
-      title: "Status updated",
-      description: `Message has been ${statusMessages[status]}.`,
-    })
   }
 
-  const handleSendReply = () => {
-    if (!currentMessage || !replyText.trim()) return
+  const handleUpdateStatus = async (message: ContactMessage, status: "new" | "read" | "replied" | "archived") => {
+    try {
+      const response = await contactMessageService.updateMessageStatus(message.id, status)
 
-    updateMessageStatus(currentMessage.id, "replied")
-    setIsReplyDialogOpen(false)
-    setReplyText("")
+      if (response.success) {
+        setMessages(
+          messages.map((msg) =>
+            msg.id === message.id ? { ...msg, status, updated_at: new Date().toISOString() } : msg,
+          ),
+        )
 
-    toast({
-      title: "Reply sent",
-      description: `Your reply to ${currentMessage.name} has been sent.`,
-    })
+        toast({
+          title: "Status updated",
+          description: `Message status has been updated to ${status}.`,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to update message status",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while updating status",
+        variant: "destructive",
+      })
+    }
   }
 
-  const getStatusColor = (status: string) => {
+  const handleReply = async () => {
+    if (!currentMessage || !replyContent.trim()) return
+
+    try {
+      const response = await contactMessageService.replyToMessage(currentMessage.id, replyContent)
+
+      if (response.success) {
+        // Update the message status to replied
+        setMessages(
+          messages.map((msg) =>
+            msg.id === currentMessage.id ? { ...msg, status: "replied", updated_at: new Date().toISOString() } : msg,
+          ),
+        )
+
+        setReplyContent("")
+        setIsReplyDialogOpen(false)
+
+        toast({
+          title: "Reply sent",
+          description: `Your reply has been sent to ${currentMessage.name}.`,
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to send reply",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while sending reply",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const handleDeleteMessage = async () => {
+    if (!currentMessage) return
+
+    try {
+      const response = await contactMessageService.deleteMessage(currentMessage.id)
+
+      if (response.success) {
+        setMessages(messages.filter((msg) => msg.id !== currentMessage.id))
+        setIsDeleteDialogOpen(false)
+
+        toast({
+          title: "Message deleted",
+          description: "The message has been deleted successfully.",
+        })
+      } else {
+        toast({
+          title: "Error",
+          description: response.message || "Failed to delete message",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "Error",
+        description: "An unexpected error occurred while deleting message",
+        variant: "destructive",
+      })
+    }
+  }
+
+  const getStatusBadgeClass = (status: string) => {
     switch (status) {
       case "new":
         return "bg-blue-100 text-blue-800"
       case "read":
-        return "bg-green-100 text-green-800"
+        return "bg-yellow-100 text-yellow-800"
       case "replied":
-        return "bg-purple-100 text-purple-800"
+        return "bg-green-100 text-green-800"
       case "archived":
         return "bg-gray-100 text-gray-800"
-      default:
-        return "bg-gray-100 text-gray-800"
-    }
-  }
-
-  const getSubjectColor = (subject: string) => {
-    switch (subject) {
-      case "information":
-        return "bg-blue-100 text-blue-800"
-      case "commande":
-        return "bg-green-100 text-green-800"
-      case "service":
-        return "bg-purple-100 text-purple-800"
-      case "reclamation":
-        return "bg-red-100 text-red-800"
       default:
         return "bg-gray-100 text-gray-800"
     }
@@ -191,15 +222,7 @@ export default function ContactMessagesPage() {
       header: "Subject",
       cell: ({ row }) => {
         const subject = row.getValue("subject") as string
-        return <Badge className={getSubjectColor(subject)}>{subjectLabels[subject] || subject}</Badge>
-      },
-    },
-    {
-      accessorKey: "message",
-      header: "Message",
-      cell: ({ row }) => {
-        const message = row.getValue("message") as string
-        return <div className="max-w-xs truncate">{message}</div>
+        return <div>{subjectLabels[subject] || subject}</div>
       },
     },
     {
@@ -207,21 +230,21 @@ export default function ContactMessagesPage() {
       header: "Status",
       cell: ({ row }) => {
         const status = row.getValue("status") as string
-        return <Badge className={getStatusColor(status)}>{status.charAt(0).toUpperCase() + status.slice(1)}</Badge>
+        return (
+          <div className={`rounded-full px-2 py-1 text-xs inline-block text-center ${getStatusBadgeClass(status)}`}>
+            {status}
+          </div>
+        )
       },
     },
     {
       accessorKey: "created_at",
       header: ({ column }) => (
         <Button variant="ghost" onClick={() => column.toggleSorting(column.getIsSorted() === "asc")}>
-          Date
+          Received
           <ArrowUpDown className="ml-2 h-4 w-4" />
         </Button>
       ),
-      cell: ({ row }) => {
-        const date = row.getValue("created_at") as string
-        return <div>{format(new Date(date), "PPP")}</div>
-      },
     },
     {
       id: "actions",
@@ -244,7 +267,7 @@ export default function ContactMessagesPage() {
                   setCurrentMessage(message)
                   setIsViewDialogOpen(true)
                   if (message.status === "new") {
-                    updateMessageStatus(message.id, "read")
+                    handleUpdateStatus(message, "read")
                   }
                 }}
               >
@@ -255,27 +278,24 @@ export default function ContactMessagesPage() {
                 onClick={() => {
                   setCurrentMessage(message)
                   setIsReplyDialogOpen(true)
-                  if (message.status === "new") {
-                    updateMessageStatus(message.id, "read")
-                  }
                 }}
               >
-                <Mail className="mr-2 h-4 w-4" />
+                <Reply className="mr-2 h-4 w-4" />
                 Reply
               </DropdownMenuItem>
               <DropdownMenuSeparator />
-              {message.status !== "read" && (
-                <DropdownMenuItem onClick={() => updateMessageStatus(message.id, "read")}>
-                  <Check className="mr-2 h-4 w-4" />
-                  Mark as Read
-                </DropdownMenuItem>
-              )}
               {message.status !== "archived" && (
-                <DropdownMenuItem onClick={() => updateMessageStatus(message.id, "archived")}>
-                  <Archive className="mr-2 h-4 w-4" />
-                  Archive
-                </DropdownMenuItem>
+                <DropdownMenuItem onClick={() => handleUpdateStatus(message, "archived")}>Archive</DropdownMenuItem>
               )}
+              <DropdownMenuItem
+                onClick={() => {
+                  setCurrentMessage(message)
+                  setIsDeleteDialogOpen(true)
+                }}
+                className="text-red-600"
+              >
+                Delete
+              </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
         )
@@ -287,109 +307,96 @@ export default function ContactMessagesPage() {
     <div className="space-y-6">
       <div>
         <h1 className="text-3xl font-bold">Contact Messages</h1>
-        <p className="text-muted-foreground">Manage customer contact messages</p>
+        <p className="text-muted-foreground">Manage messages from the contact form</p>
       </div>
 
-      <div className="flex items-center space-x-4 bg-muted/50 p-4 rounded-lg">
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-blue-100 text-blue-800">New</Badge>
-          <span className="text-sm font-medium">{messages.filter((m) => m.status === "new").length}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-green-100 text-green-800">Read</Badge>
-          <span className="text-sm font-medium">{messages.filter((m) => m.status === "read").length}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-purple-100 text-purple-800">Replied</Badge>
-          <span className="text-sm font-medium">{messages.filter((m) => m.status === "replied").length}</span>
-        </div>
-        <div className="flex items-center space-x-2">
-          <Badge className="bg-gray-100 text-gray-800">Archived</Badge>
-          <span className="text-sm font-medium">{messages.filter((m) => m.status === "archived").length}</span>
-        </div>
-      </div>
-
-      <DataTable columns={columns} data={messages} searchColumn="email" searchPlaceholder="Search by email..." />
+      <DataTable
+        columns={columns}
+        data={messages}
+        searchColumn="email"
+        searchPlaceholder="Search by email..."
+        isLoading={isLoading}
+      />
 
       {/* View Message Dialog */}
       <Dialog open={isViewDialogOpen} onOpenChange={setIsViewDialogOpen}>
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Message Details</DialogTitle>
-            <DialogDescription>Message from {currentMessage?.name}</DialogDescription>
+            <DialogDescription>
+              Message from {currentMessage?.name} ({currentMessage?.email})
+            </DialogDescription>
           </DialogHeader>
           {currentMessage && (
-            <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">From</Label>
-                  <div className="font-medium">{currentMessage.name}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Date</Label>
-                  <div>{format(new Date(currentMessage.created_at), "PPP p")}</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label className="text-muted-foreground">Email</Label>
-                  <div className="font-medium">{currentMessage.email}</div>
-                </div>
-                <div>
-                  <Label className="text-muted-foreground">Phone</Label>
-                  <div>{currentMessage.phone || "Not provided"}</div>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-muted-foreground">Subject</Label>
-                <div>
-                  <Badge className={getSubjectColor(currentMessage.subject)}>
-                    {subjectLabels[currentMessage.subject] || currentMessage.subject}
-                  </Badge>
-                </div>
-              </div>
-
-              <div>
-                <Label className="text-muted-foreground">Message</Label>
-                <Card className="mt-1">
-                  <CardContent className="p-4">
-                    <p className="whitespace-pre-wrap">{currentMessage.message}</p>
-                  </CardContent>
-                </Card>
-              </div>
-
-              <div className="flex justify-between">
-                <div>
-                  <Label className="text-muted-foreground">Status</Label>
-                  <div>
-                    <Badge className={getStatusColor(currentMessage.status)}>
-                      {currentMessage.status.charAt(0).toUpperCase() + currentMessage.status.slice(1)}
-                    </Badge>
+            <div className="space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Contact Information</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <div className="font-medium">Name</div>
+                      <div>{currentMessage.name}</div>
+                    </div>
+                    <div>
+                      <div className="font-medium">Email</div>
+                      <div>{currentMessage.email}</div>
+                    </div>
                   </div>
+                  {currentMessage.phone && (
+                    <div>
+                      <div className="font-medium">Phone</div>
+                      <div>{currentMessage.phone}</div>
+                    </div>
+                  )}
+                  <div>
+                    <div className="font-medium">Subject</div>
+                    <div>{subjectLabels[currentMessage.subject] || currentMessage.subject}</div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-lg">Message</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="whitespace-pre-wrap">{currentMessage.message}</div>
+                </CardContent>
+              </Card>
+
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-sm text-muted-foreground">Received</div>
+                  <div>{new Date(currentMessage.created_at).toLocaleString()}</div>
                 </div>
-                <div className="space-x-2">
-                  <Button
-                    variant="outline"
-                    onClick={() => {
-                      setIsViewDialogOpen(false)
-                      setIsReplyDialogOpen(true)
-                    }}
+                <div>
+                  <div className="text-sm text-muted-foreground">Status</div>
+                  <div
+                    className={`rounded-full px-2 py-1 text-xs inline-block text-center ${getStatusBadgeClass(
+                      currentMessage.status,
+                    )}`}
                   >
-                    <Mail className="mr-2 h-4 w-4" />
-                    Reply
-                  </Button>
-                  <Button variant="outline" onClick={() => updateMessageStatus(currentMessage.id, "archived")}>
-                    <Archive className="mr-2 h-4 w-4" />
-                    Archive
-                  </Button>
+                    {currentMessage.status}
+                  </div>
                 </div>
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setIsViewDialogOpen(false)}>Close</Button>
+            <Button
+              onClick={() => {
+                setIsViewDialogOpen(false)
+                setIsReplyDialogOpen(true)
+              }}
+            >
+              <Reply className="mr-2 h-4 w-4" />
+              Reply
+            </Button>
+            <Button variant="outline" onClick={() => setIsViewDialogOpen(false)}>
+              Close
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -399,42 +406,30 @@ export default function ContactMessagesPage() {
         <DialogContent className="sm:max-w-[600px]">
           <DialogHeader>
             <DialogTitle>Reply to Message</DialogTitle>
-            <DialogDescription>Send a reply to {currentMessage?.name}</DialogDescription>
+            <DialogDescription>
+              Send a reply to {currentMessage?.name} ({currentMessage?.email})
+            </DialogDescription>
           </DialogHeader>
           {currentMessage && (
             <div className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <Label htmlFor="to">To</Label>
-                  <Input id="to" value={currentMessage.email} disabled />
-                </div>
-                <div>
-                  <Label htmlFor="subject">Subject</Label>
-                  <Input
-                    id="subject"
-                    value={`Re: ${subjectLabels[currentMessage.subject] || currentMessage.subject}`}
-                    disabled
-                  />
+              <div className="space-y-2">
+                <Label>Original Message</Label>
+                <div className="rounded-md border p-3 text-sm bg-muted/50">
+                  <div className="font-medium">
+                    Subject: {subjectLabels[currentMessage.subject] || currentMessage.subject}
+                  </div>
+                  <Separator className="my-2" />
+                  <div className="whitespace-pre-wrap">{currentMessage.message}</div>
                 </div>
               </div>
-
-              <div>
-                <Label htmlFor="original-message">Original Message</Label>
-                <Card className="mt-1">
-                  <CardContent className="p-4 text-sm text-muted-foreground">
-                    <p className="whitespace-pre-wrap">{currentMessage.message}</p>
-                  </CardContent>
-                </Card>
-              </div>
-
               <div className="space-y-2">
                 <Label htmlFor="reply">Your Reply</Label>
                 <Textarea
                   id="reply"
-                  value={replyText}
-                  onChange={(e) => setReplyText(e.target.value)}
-                  placeholder="Type your reply here..."
+                  value={replyContent}
+                  onChange={(e) => setReplyContent(e.target.value)}
                   className="min-h-[150px]"
+                  placeholder="Type your reply here..."
                 />
               </div>
             </div>
@@ -443,7 +438,37 @@ export default function ContactMessagesPage() {
             <Button variant="outline" onClick={() => setIsReplyDialogOpen(false)}>
               Cancel
             </Button>
-            <Button onClick={handleSendReply}>Send Reply</Button>
+            <Button onClick={handleReply}>Send Reply</Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Message Dialog */}
+      <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
+        <DialogContent className="sm:max-w-[425px]">
+          <DialogHeader>
+            <DialogTitle>Delete Message</DialogTitle>
+            <DialogDescription>
+              Are you sure you want to delete this message? This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          {currentMessage && (
+            <div className="py-4">
+              <p>
+                You are about to delete a message from: <strong>{currentMessage.name}</strong>
+              </p>
+              <p className="mt-2 text-sm text-muted-foreground">
+                Subject: {subjectLabels[currentMessage.subject] || currentMessage.subject}
+              </p>
+            </div>
+          )}
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+              Cancel
+            </Button>
+            <Button variant="destructive" onClick={handleDeleteMessage}>
+              Delete
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

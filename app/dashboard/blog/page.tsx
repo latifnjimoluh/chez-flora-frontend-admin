@@ -1,8 +1,10 @@
 "use client"
 
-import { useState } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, Plus, Heart, Image } from "lucide-react"
+import { ArrowUpDown, MoreHorizontal, Plus, Heart, Image, Loader2, Upload, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import {
@@ -26,6 +28,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
+import { blogService } from "@/services/blogService"
+import { uploadImageByType } from "@/services/cloudinaryService"
 
 type BlogPost = {
   id: number
@@ -44,62 +48,9 @@ type BlogPost = {
   updated_at: string
 }
 
-const initialBlogPosts: BlogPost[] = [
-  {
-    id: 1,
-    title: "Comment prendre soin de vos orchidées",
-    slug: "soin-orchidees",
-    excerpt: "Découvrez nos conseils d'experts pour garder vos orchidées en pleine santé toute l'année.",
-    content:
-      "<p>Les orchidées sont parmi les plantes d'intérieur les plus populaires, mais elles ont la réputation d'être difficiles à entretenir. Pourtant, avec quelques connaissances de base et une attention régulière, vous pouvez profiter de ces magnifiques fleurs pendant de nombreuses années.</p>\r\n  \r\n  <h2>Choisir le bon emplacement</h2>\r\n  <p>Les orchidées apprécient la lumière vive mais indirecte. Une fenêtre orientée à l'est ou à l'ouest est idéale. Évitez l'exposition directe au soleil, qui peut brûler les feuilles, mais aussi les endroits trop sombres, qui empêcheront la floraison.</p>\r\n  \r\n  <h2>L'arrosage : la clé du succès</h2>\r\n  <p>L'erreur la plus courante avec les orchidées est l'excès d'arrosage. La plupart des orchidées d'intérieur sont épiphytes, ce qui signifie qu'elles poussent naturellement sur les arbres et non dans le sol. Leurs racines ont besoin d'air et peuvent pourrir si elles restent constamment humides.</p>\r\n  \r\n  <h2>La nutrition adaptée</h2>\r\n  <p>Utilisez un engrais spécifique pour orchidées, dilué à la moitié de la dose recommandée. Fertilisez votre orchidée toutes les deux semaines pendant la période de croissance (printemps et été) et une fois par mois le reste de l'année.</p>\r\n  \r\n  <h2>Rempotage et substrat</h2>\r\n  <p>Les orchidées doivent être rempotées tous les 2 à 3 ans, idéalement après la floraison. Utilisez un substrat spécial pour orchidées, composé d'écorce de pin, de charbon de bois et de mousse de sphaigne.</p>",
-    image: "/placeholder.svg?height=600&width=1200",
-    date: "2023-05-12",
-    author: "Nexus",
-    category: "Conseils d'entretien",
-    tags: ["Orchidées", "Plantes d'intérieur", "Entretien"],
-    likes: 43,
-    readTime: "5 min",
-    created_at: "2025-03-18 13:58:58",
-    updated_at: "2025-03-18 14:29:02",
-  },
-  {
-    id: 2,
-    title: "Les tendances florales de la saison",
-    slug: "tendances-florales",
-    excerpt: "Quelles sont les fleurs et les compositions qui font sensation cette saison ? Notre guide complet.",
-    content:
-      "<p>Chaque saison apporte son lot de nouveautés dans le monde floral. Découvrez les tendances qui font sensation ce printemps-été et comment les intégrer dans votre intérieur ou vos événements.</p>\r\n  \r\n  <h2>Le retour des fleurs séchées</h2>\r\n  <p>Après plusieurs années en arrière-plan, les fleurs séchées font un retour remarqué. Loin des compositions poussiéreuses d'autrefois, les nouvelles tendances mettent en avant des arrangements modernes et épurés, souvent teints dans des couleurs pastel ou naturelles.</p>\r\n  \r\n  <h2>Les compositions monochromes</h2>\r\n  <p>Les bouquets d'une seule couleur, mais dans différentes nuances et avec diverses variétés de fleurs, sont très tendance. Ces compositions élégantes et sophistiquées apportent une touche de cohérence et de sérénité à n'importe quel espace.</p>\r\n  \r\n  <h2>L'influence japonaise</h2>\r\n  <p>L'art floral japonais, notamment l'ikebana, influence fortement les compositions actuelles. On observe une recherche d'équilibre, de simplicité et d'asymétrie qui met en valeur chaque fleur individuellement.</p>",
-    image: "/placeholder.svg?height=600&width=1200",
-    date: "2023-04-28",
-    author: "Nexus2",
-    category: "Tendances",
-    tags: ["Tendances", "Saison", "Compositions"],
-    likes: 36,
-    readTime: "4 min",
-    created_at: "2025-03-18 13:58:58",
-    updated_at: "2025-03-18 14:31:07",
-  },
-  {
-    id: 3,
-    title: "Créer un jardin d'intérieur durable",
-    slug: "jardin-interieur-durable",
-    excerpt: "Nos astuces pour aménager un espace vert chez vous, même avec peu de place et de lumière.",
-    content:
-      "<p>Vous rêvez d'un coin de verdure chez vous mais vous manquez d'espace ou de lumière ? Découvrez comment créer un jardin d'intérieur durable qui s'adapte à toutes les contraintes.</p>\r\n  \r\n  <h2>Choisir les bonnes plantes</h2>\r\n  <p>La première étape consiste à sélectionner des plantes adaptées à votre environnement. Pour les espaces peu lumineux, optez pour des variétés comme le pothos, la langue de belle-mère ou le ZZ plant. Ces plantes sont robustes et nécessitent peu d'entretien.</p>\r\n  \r\n  <h2>Optimiser l'espace</h2>\r\n  <p>Utilisez les murs et le plafond pour installer des étagères, des supports suspendus ou des jardins verticaux. Ces solutions permettent de maximiser l'espace disponible sans encombrer vos surfaces de vie.</p>\r\n  \r\n  <h2>Système d'arrosage intelligent</h2>\r\n  <p>Pour un jardin vraiment durable, investissez dans un système d'arrosage automatique ou des pots auto-irrigants. Ces dispositifs garantissent que vos plantes reçoivent la bonne quantité d'eau, même pendant vos absences.</p>",
-    image: "/placeholder.svg?height=600&width=1200",
-    date: "2023-04-15",
-    author: "Nexus3",
-    category: "Jardinage",
-    tags: ["Plantes d'intérieur", "Jardinage", "Développement durable"],
-    likes: 28,
-    readTime: "6 min",
-    created_at: "2025-03-18 13:58:58",
-    updated_at: "2025-03-22 08:05:14",
-  },
-]
-
 export default function BlogPage() {
-  const [blogPosts, setBlogPosts] = useState<BlogPost[]>(initialBlogPosts)
+  const [blogPosts, setBlogPosts] = useState<BlogPost[]>([])
+  const [isLoading, setIsLoading] = useState(true)
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -115,82 +66,229 @@ export default function BlogPage() {
     tags: [],
     readTime: "5 min",
   })
+  const [actionLoading, setActionLoading] = useState(false)
   const { toast } = useToast()
 
-  const handleAddPost = () => {
-    const id = Math.max(...blogPosts.map((post) => post.id)) + 1
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
-    const today = new Date().toISOString().split("T")[0]
-    const slug =
-      newPost.title
-        ?.toLowerCase()
-        .replace(/[^\w\s]/gi, "")
-        .replace(/\s+/g, "-") || ""
+  // Références pour les input file
+  const addImageInputRef = useRef<HTMLInputElement>(null)
+  const editImageInputRef = useRef<HTMLInputElement>(null)
 
-    const post: BlogPost = {
-      id,
-      title: newPost.title || "",
-      slug,
-      excerpt: newPost.excerpt || null,
-      content: newPost.content || "",
-      image: newPost.image,
-      date: today,
-      author: newPost.author || "",
-      category: newPost.category || "",
-      tags: newPost.tags || [],
-      likes: 0,
-      readTime: newPost.readTime || "5 min",
-      created_at: now,
-      updated_at: now,
+  // États pour les images sélectionnées
+  const [selectedAddImage, setSelectedAddImage] = useState<File | null>(null)
+  const [selectedEditImage, setSelectedEditImage] = useState<File | null>(null)
+  const [previewAddImage, setPreviewAddImage] = useState<string | null>(null)
+  const [previewEditImage, setPreviewEditImage] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchBlogPosts()
+  }, [])
+
+  const fetchBlogPosts = async () => {
+    setIsLoading(true)
+    try {
+      const response = await blogService.getAllPosts()
+      setBlogPosts(response.data || [])
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de récupérer les articles de blog",
+        variant: "destructive",
+      })
+    } finally {
+      setIsLoading(false)
     }
-
-    setBlogPosts([...blogPosts, post])
-    setNewPost({
-      title: "",
-      excerpt: "",
-      content: "",
-      image: null,
-      author: "",
-      category: "",
-      tags: [],
-      readTime: "5 min",
-    })
-    setIsAddDialogOpen(false)
-
-    toast({
-      title: "Blog post added",
-      description: `"${post.title}" has been added successfully.`,
-    })
   }
 
-  const handleEditPost = () => {
-    if (!currentPost) return
+  const handleAddImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
 
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
-    const updatedPost = {
-      ...currentPost,
-      updated_at: now,
-    }
+    const file = files[0]
+    setSelectedAddImage(file)
 
-    setBlogPosts(blogPosts.map((post) => (post.id === currentPost.id ? updatedPost : post)))
-    setIsEditDialogOpen(false)
-
-    toast({
-      title: "Blog post updated",
-      description: `"${currentPost.title}" has been updated successfully.`,
-    })
+    // Générer un aperçu pour l'image
+    const preview = URL.createObjectURL(file)
+    setPreviewAddImage(preview)
   }
 
-  const handleDeletePost = () => {
+  const handleEditImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files || files.length === 0) return
+
+    const file = files[0]
+    setSelectedEditImage(file)
+
+    // Générer un aperçu pour l'image
+    const preview = URL.createObjectURL(file)
+    setPreviewEditImage(preview)
+  }
+
+  const removeAddImage = () => {
+    if (previewAddImage) {
+      URL.revokeObjectURL(previewAddImage)
+    }
+    setSelectedAddImage(null)
+    setPreviewAddImage(null)
+  }
+
+  const removeEditImage = () => {
+    if (previewEditImage) {
+      URL.revokeObjectURL(previewEditImage)
+    }
+    setSelectedEditImage(null)
+    setPreviewEditImage(null)
+  }
+
+  const handleAddPost = async () => {
+    if (!newPost.title || !newPost.content) {
+      toast({
+        title: "Erreur",
+        description: "Le titre et le contenu de l'article sont requis",
+        variant: "destructive",
+      })
+      return
+    }
+
+    setActionLoading(true)
+    try {
+      // Préparer les données de l'article
+      const postData: any = {
+        title: newPost.title,
+        excerpt: newPost.excerpt || "",
+        content: newPost.content,
+        author: newPost.author || "Admin",
+        category: newPost.category || "Non catégorisé",
+        tags: newPost.tags || [],
+        readTime: newPost.readTime || "5 min",
+      }
+
+      // Upload de l'image si elle existe
+      if (selectedAddImage) {
+        const imageUrl = await uploadImageByType(selectedAddImage, "blog")
+        postData.image = imageUrl
+      }
+
+      const response = await blogService.createPost(postData)
+
+      if (response.success) {
+        toast({
+          title: "Succès",
+          description: "Article ajouté avec succès",
+        })
+
+        fetchBlogPosts()
+        setIsAddDialogOpen(false)
+        setNewPost({
+          title: "",
+          excerpt: "",
+          content: "",
+          image: null,
+          author: "",
+          category: "",
+          tags: [],
+          readTime: "5 min",
+        })
+
+        // Réinitialiser l'image
+        if (previewAddImage) {
+          URL.revokeObjectURL(previewAddImage)
+        }
+        setSelectedAddImage(null)
+        setPreviewAddImage(null)
+      } else {
+        throw new Error(response.message || "Erreur lors de la création de l'article")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible d'ajouter l'article",
+        variant: "destructive",
+      })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleEditPost = async () => {
     if (!currentPost) return
 
-    setBlogPosts(blogPosts.filter((post) => post.id !== currentPost.id))
-    setIsDeleteDialogOpen(false)
+    setActionLoading(true)
+    try {
+      // Préparer les données de l'article
+      const postData: any = {
+        title: currentPost.title,
+        excerpt: currentPost.excerpt || "",
+        content: currentPost.content,
+        author: currentPost.author,
+        category: currentPost.category,
+        tags: currentPost.tags,
+        readTime: currentPost.readTime,
+      }
 
-    toast({
-      title: "Blog post deleted",
-      description: `"${currentPost.title}" has been deleted successfully.`,
-    })
+      // Upload de la nouvelle image si elle existe
+      if (selectedEditImage) {
+        const imageUrl = await uploadImageByType(selectedEditImage, "blog")
+        postData.image = imageUrl
+      }
+
+      const response = await blogService.updatePost(currentPost.id, postData)
+
+      if (response.success) {
+        toast({
+          title: "Succès",
+          description: "Article mis à jour avec succès",
+        })
+
+        fetchBlogPosts()
+        setIsEditDialogOpen(false)
+
+        // Réinitialiser l'image
+        if (previewEditImage) {
+          URL.revokeObjectURL(previewEditImage)
+        }
+        setSelectedEditImage(null)
+        setPreviewEditImage(null)
+      } else {
+        throw new Error(response.message || "Erreur lors de la mise à jour de l'article")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de mettre à jour l'article",
+        variant: "destructive",
+      })
+    } finally {
+      setActionLoading(false)
+    }
+  }
+
+  const handleDeletePost = async () => {
+    if (!currentPost) return
+
+    setActionLoading(true)
+    try {
+      const response = await blogService.deletePost(currentPost.id)
+
+      if (response.success) {
+        toast({
+          title: "Succès",
+          description: "Article supprimé avec succès",
+        })
+
+        fetchBlogPosts()
+        setIsDeleteDialogOpen(false)
+      } else {
+        throw new Error(response.message || "Erreur lors de la suppression de l'article")
+      }
+    } catch (error: any) {
+      toast({
+        title: "Erreur",
+        description: error.message || "Impossible de supprimer l'article",
+        variant: "destructive",
+      })
+    } finally {
+      setActionLoading(false)
+    }
   }
 
   const formatDate = (dateString: string) => {
@@ -209,15 +307,15 @@ export default function BlogPage() {
     },
     {
       accessorKey: "title",
-      header: "Title",
+      header: "Titre",
     },
     {
       accessorKey: "author",
-      header: "Author",
+      header: "Auteur",
     },
     {
       accessorKey: "category",
-      header: "Category",
+      header: "Catégorie",
     },
     {
       accessorKey: "date",
@@ -255,7 +353,7 @@ export default function BlogPage() {
       header: "Image",
       cell: ({ row }) => {
         const image = row.getValue("image") as string | null
-        if (!image) return <div>No image</div>
+        if (!image) return <div>Aucune image</div>
         return (
           <Button
             variant="outline"
@@ -266,7 +364,7 @@ export default function BlogPage() {
             }}
           >
             <Image className="mr-2 h-4 w-4" />
-            View
+            Voir
           </Button>
         )
       },
@@ -280,7 +378,7 @@ export default function BlogPage() {
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="ghost" className="h-8 w-8 p-0">
-                <span className="sr-only">Open menu</span>
+                <span className="sr-only">Ouvrir le menu</span>
                 <MoreHorizontal className="h-4 w-4" />
               </Button>
             </DropdownMenuTrigger>
@@ -291,9 +389,12 @@ export default function BlogPage() {
                 onClick={() => {
                   setCurrentPost(post)
                   setIsEditDialogOpen(true)
+                  // Réinitialiser l'image d'édition
+                  setSelectedEditImage(null)
+                  setPreviewEditImage(null)
                 }}
               >
-                Edit
+                Modifier
               </DropdownMenuItem>
               <DropdownMenuItem
                 onClick={() => {
@@ -302,7 +403,7 @@ export default function BlogPage() {
                 }}
                 className="text-red-600"
               >
-                Delete
+                Supprimer
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
@@ -315,27 +416,40 @@ export default function BlogPage() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Blog Posts</h1>
-          <p className="text-muted-foreground">Manage your blog content</p>
+          <h1 className="text-3xl font-bold">Articles de Blog</h1>
+          <p className="text-muted-foreground">Gérer le contenu de votre blog</p>
         </div>
         <Button onClick={() => setIsAddDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
-          Add Post
+          Ajouter un article
         </Button>
       </div>
 
-      <DataTable columns={columns} data={blogPosts} searchColumn="title" searchPlaceholder="Search by title..." />
+      {isLoading ? (
+        <div className="flex justify-center items-center h-64">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      ) : (
+        <DataTable
+          columns={columns}
+          data={blogPosts}
+          searchColumn="title"
+          searchPlaceholder="Rechercher par titre..."
+        />
+      )}
 
-      {/* Add Blog Post Dialog */}
+      {/* Ajouter un article */}
       <Dialog open={isAddDialogOpen} onOpenChange={setIsAddDialogOpen}>
         <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
-            <DialogTitle>Add New Blog Post</DialogTitle>
-            <DialogDescription>Create a new blog post. Click save when you're done.</DialogDescription>
+            <DialogTitle>Ajouter un nouvel article</DialogTitle>
+            <DialogDescription>
+              Créer un nouvel article de blog. Cliquez sur enregistrer lorsque vous avez terminé.
+            </DialogDescription>
           </DialogHeader>
           <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
             <div className="space-y-2">
-              <Label htmlFor="title">Title</Label>
+              <Label htmlFor="title">Titre</Label>
               <Input
                 id="title"
                 value={newPost.title}
@@ -343,27 +457,27 @@ export default function BlogPage() {
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="excerpt">Excerpt</Label>
+              <Label htmlFor="excerpt">Extrait</Label>
               <Textarea
                 id="excerpt"
                 value={newPost.excerpt || ""}
                 onChange={(e) => setNewPost({ ...newPost, excerpt: e.target.value })}
-                placeholder="A brief summary of the post"
+                placeholder="Un bref résumé de l'article"
               />
             </div>
             <div className="space-y-2">
-              <Label htmlFor="content">Content (HTML)</Label>
+              <Label htmlFor="content">Contenu (HTML)</Label>
               <Textarea
                 id="content"
                 value={newPost.content}
                 onChange={(e) => setNewPost({ ...newPost, content: e.target.value })}
                 className="min-h-[200px] font-mono text-sm"
-                placeholder="<p>Your content here...</p>"
+                placeholder="<p>Votre contenu ici...</p>"
               />
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="author">Author</Label>
+                <Label htmlFor="author">Auteur</Label>
                 <Input
                   id="author"
                   value={newPost.author}
@@ -371,7 +485,7 @@ export default function BlogPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="category">Category</Label>
+                <Label htmlFor="category">Catégorie</Label>
                 <Input
                   id="category"
                   value={newPost.category}
@@ -381,7 +495,7 @@ export default function BlogPage() {
             </div>
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
-                <Label htmlFor="tags">Tags (comma separated)</Label>
+                <Label htmlFor="tags">Tags (séparés par des virgules)</Label>
                 <Input
                   id="tags"
                   value={newPost.tags?.join(", ") || ""}
@@ -390,7 +504,7 @@ export default function BlogPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="readTime">Read Time</Label>
+                <Label htmlFor="readTime">Temps de lecture</Label>
                 <Input
                   id="readTime"
                   value={newPost.readTime}
@@ -399,36 +513,79 @@ export default function BlogPage() {
                 />
               </div>
             </div>
+
+            {/* Upload d'image */}
             <div className="space-y-2">
-              <Label htmlFor="image">Featured Image URL</Label>
-              <Input
-                id="image"
-                value={newPost.image || ""}
-                onChange={(e) => setNewPost({ ...newPost, image: e.target.value })}
-                placeholder="https://example.com/image.jpg"
-              />
+              <Label htmlFor="image">Image à la une</Label>
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => addImageInputRef.current?.click()}
+              >
+                <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                <p className="mt-2 text-sm text-gray-500">Cliquez pour sélectionner une image</p>
+                <p className="text-xs text-gray-400">JPG, PNG, GIF jusqu'à 5MB</p>
+                <input
+                  type="file"
+                  ref={addImageInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  onChange={handleAddImageChange}
+                />
+              </div>
+
+              {/* Aperçu de l'image sélectionnée */}
+              {previewAddImage && (
+                <div className="relative rounded-md overflow-hidden h-48 mt-2">
+                  <img
+                    src={previewAddImage || "/placeholder.svg"}
+                    alt="Aperçu"
+                    className="w-full h-full object-cover"
+                  />
+                  <button
+                    type="button"
+                    className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      removeAddImage()
+                    }}
+                  >
+                    <X className="h-4 w-4" />
+                  </button>
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={actionLoading}>
+              Annuler
             </Button>
-            <Button onClick={handleAddPost}>Save</Button>
+            <Button onClick={handleAddPost} disabled={actionLoading}>
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : (
+                "Enregistrer"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Blog Post Dialog */}
+      {/* Modifier un article */}
       <Dialog open={isEditDialogOpen} onOpenChange={setIsEditDialogOpen}>
         <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
-            <DialogTitle>Edit Blog Post</DialogTitle>
-            <DialogDescription>Update blog post information. Click save when you're done.</DialogDescription>
+            <DialogTitle>Modifier l'article</DialogTitle>
+            <DialogDescription>
+              Mettre à jour les informations de l'article. Cliquez sur enregistrer lorsque vous avez terminé.
+            </DialogDescription>
           </DialogHeader>
           {currentPost && (
             <div className="grid gap-4 py-4 max-h-[60vh] overflow-y-auto pr-2">
               <div className="space-y-2">
-                <Label htmlFor="edit_title">Title</Label>
+                <Label htmlFor="edit_title">Titre</Label>
                 <Input
                   id="edit_title"
                   value={currentPost.title}
@@ -436,7 +593,7 @@ export default function BlogPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit_excerpt">Excerpt</Label>
+                <Label htmlFor="edit_excerpt">Extrait</Label>
                 <Textarea
                   id="edit_excerpt"
                   value={currentPost.excerpt || ""}
@@ -444,7 +601,7 @@ export default function BlogPage() {
                 />
               </div>
               <div className="space-y-2">
-                <Label htmlFor="edit_content">Content (HTML)</Label>
+                <Label htmlFor="edit_content">Contenu (HTML)</Label>
                 <Textarea
                   id="edit_content"
                   value={currentPost.content}
@@ -454,7 +611,7 @@ export default function BlogPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit_author">Author</Label>
+                  <Label htmlFor="edit_author">Auteur</Label>
                   <Input
                     id="edit_author"
                     value={currentPost.author}
@@ -462,7 +619,7 @@ export default function BlogPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit_category">Category</Label>
+                  <Label htmlFor="edit_category">Catégorie</Label>
                   <Input
                     id="edit_category"
                     value={currentPost.category}
@@ -472,7 +629,7 @@ export default function BlogPage() {
               </div>
               <div className="grid grid-cols-2 gap-4">
                 <div className="space-y-2">
-                  <Label htmlFor="edit_tags">Tags (comma separated)</Label>
+                  <Label htmlFor="edit_tags">Tags (séparés par des virgules)</Label>
                   <Input
                     id="edit_tags"
                     value={currentPost.tags.join(", ")}
@@ -482,7 +639,7 @@ export default function BlogPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit_readTime">Read Time</Label>
+                  <Label htmlFor="edit_readTime">Temps de lecture</Label>
                   <Input
                     id="edit_readTime"
                     value={currentPost.readTime}
@@ -490,70 +647,125 @@ export default function BlogPage() {
                   />
                 </div>
               </div>
+
+              {/* Image existante */}
               <div className="space-y-2">
-                <Label htmlFor="edit_image">Featured Image URL</Label>
-                <Input
-                  id="edit_image"
-                  value={currentPost.image || ""}
-                  onChange={(e) => setCurrentPost({ ...currentPost, image: e.target.value })}
-                />
-                {currentPost.image && (
-                  <div className="mt-2">
-                    <p className="text-sm font-medium mb-1">Preview:</p>
+                <Label>Image existante</Label>
+                {currentPost.image ? (
+                  <div className="relative rounded-md overflow-hidden h-48">
                     <img
                       src={currentPost.image || "/placeholder.svg"}
-                      alt="Preview"
-                      className="max-h-[200px] rounded-md border"
+                      alt="Image existante"
+                      className="w-full h-full object-cover"
                     />
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Aucune image existante</p>
+                )}
+              </div>
+
+              {/* Upload d'une nouvelle image */}
+              <div className="space-y-2">
+                <Label htmlFor="edit_image">Remplacer l'image</Label>
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => editImageInputRef.current?.click()}
+                >
+                  <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-500">Cliquez pour sélectionner une nouvelle image</p>
+                  <p className="text-xs text-gray-400">JPG, PNG, GIF jusqu'à 5MB</p>
+                  <input
+                    type="file"
+                    ref={editImageInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    onChange={handleEditImageChange}
+                  />
+                </div>
+
+                {/* Aperçu de la nouvelle image */}
+                {previewEditImage && (
+                  <div className="relative rounded-md overflow-hidden h-48 mt-2">
+                    <img
+                      src={previewEditImage || "/placeholder.svg"}
+                      alt="Aperçu"
+                      className="w-full h-full object-cover"
+                    />
+                    <button
+                      type="button"
+                      className="absolute top-2 right-2 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        removeEditImage()
+                      }}
+                    >
+                      <X className="h-4 w-4" />
+                    </button>
                   </div>
                 )}
               </div>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={actionLoading}>
+              Annuler
             </Button>
-            <Button onClick={handleEditPost}>Save Changes</Button>
+            <Button onClick={handleEditPost} disabled={actionLoading}>
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Enregistrement...
+                </>
+              ) : (
+                "Enregistrer les modifications"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* Delete Blog Post Dialog */}
+      {/* Supprimer un article */}
       <Dialog open={isDeleteDialogOpen} onOpenChange={setIsDeleteDialogOpen}>
         <DialogContent className="sm:max-w-[425px]">
           <DialogHeader>
-            <DialogTitle>Delete Blog Post</DialogTitle>
+            <DialogTitle>Supprimer l'article</DialogTitle>
             <DialogDescription>
-              Are you sure you want to delete this blog post? This action cannot be undone.
+              Êtes-vous sûr de vouloir supprimer cet article ? Cette action ne peut pas être annulée.
             </DialogDescription>
           </DialogHeader>
           {currentPost && (
             <div className="py-4">
               <p>
-                You are about to delete: <strong>{currentPost.title}</strong>
+                Vous êtes sur le point de supprimer : <strong>{currentPost.title}</strong>
               </p>
               <p className="mt-2 text-sm text-muted-foreground">
-                This post has {currentPost.likes} likes and was published on {formatDate(currentPost.date)}.
+                Cet article a {currentPost.likes} likes et a été publié le {formatDate(currentPost.date)}.
               </p>
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
-              Cancel
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={actionLoading}>
+              Annuler
             </Button>
-            <Button variant="destructive" onClick={handleDeletePost}>
-              Delete
+            <Button variant="destructive" onClick={handleDeletePost} disabled={actionLoading}>
+              {actionLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Suppression...
+                </>
+              ) : (
+                "Supprimer"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      {/* View Image Dialog */}
+      {/* Voir l'image */}
       <Dialog open={isViewImageDialogOpen} onOpenChange={setIsViewImageDialogOpen}>
         <DialogContent className="sm:max-w-[700px]">
           <DialogHeader>
-            <DialogTitle>Featured Image</DialogTitle>
+            <DialogTitle>Image à la une</DialogTitle>
             <DialogDescription>{currentPost?.title}</DialogDescription>
           </DialogHeader>
           {currentPost && currentPost.image && (
@@ -566,7 +778,7 @@ export default function BlogPage() {
             </div>
           )}
           <DialogFooter>
-            <Button onClick={() => setIsViewImageDialogOpen(false)}>Close</Button>
+            <Button onClick={() => setIsViewImageDialogOpen(false)}>Fermer</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>

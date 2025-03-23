@@ -4,21 +4,23 @@ export const contactSubjectService = {
   // Récupérer tous les sujets de contact
   getAllSubjects: async () => {
     try {
-      const response = await api.get("/admin/contact-subjects")
-      return response.data
-    } catch (error) {
-      console.error("Error fetching contact subjects:", error)
+      const response = await api.get("/api/admin/contact/subjects")
+      
+      // On enveloppe la réponse brutale dans un format normalisé
       return {
-        success: false,
-        message: "Erreur lors de la récupération des sujets de contact",
+        success: true,
+        data: response.data, // data ici est directement le tableau
       }
+    } catch (error) {
+      console.error("Error fetching contact info:", error)
+      return { success: false, data: [], message: "Failed to fetch contact info" }
     }
   },
 
   // Récupérer un sujet de contact par son ID
   getSubjectById: async (id: number) => {
     try {
-      const response = await api.get(`/admin/contact-subjects/${id}`)
+      const response = await api.get(`/api/admin/contact/subjects/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching contact subject ${id}:`, error)
@@ -32,7 +34,7 @@ export const contactSubjectService = {
   // Créer un nouveau sujet de contact
   createSubject: async (subjectData: any) => {
     try {
-      const response = await api.post("/admin/contact-subjects", subjectData)
+      const response = await api.post("/api/admin/contact/subjects", subjectData)
       return response.data
     } catch (error) {
       console.error("Error creating contact subject:", error)
@@ -46,7 +48,7 @@ export const contactSubjectService = {
   // Mettre à jour un sujet de contact
   updateSubject: async (id: number, subjectData: any) => {
     try {
-      const response = await api.put(`/admin/contact-subjects/${id}`, subjectData)
+      const response = await api.put(`/api/admin/contact/subjects/${id}`, subjectData)
       return response.data
     } catch (error) {
       console.error(`Error updating contact subject ${id}:`, error)
@@ -60,7 +62,7 @@ export const contactSubjectService = {
   // Supprimer un sujet de contact
   deleteSubject: async (id: number) => {
     try {
-      const response = await api.delete(`/admin/contact-subjects/${id}`)
+      const response = await api.delete(`/api/admin/contact/subjects/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error deleting contact subject ${id}:`, error)
@@ -74,7 +76,7 @@ export const contactSubjectService = {
   // Réorganiser les sujets de contact
   reorderSubjects: async (orders: { id: number; display_order: number }[]) => {
     try {
-      const response = await api.post("/admin/contact-subjects/reorder", { orders })
+      const response = await api.post("/api/admin/contact/subjects/reorder", { orders })
       return response.data
     } catch (error) {
       console.error("Error reordering contact subjects:", error)

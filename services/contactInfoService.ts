@@ -19,17 +19,22 @@ export interface ContactInfoResponse {
 export const contactInfoService = {
   getAllContactInfo: async (): Promise<ContactInfoResponse> => {
     try {
-      const response = await api.get("/admin/contact-info")
-      return response.data
+      const response = await api.get("/api/admin/contact/info")
+      
+      // On enveloppe la réponse brutale dans un format normalisé
+      return {
+        success: true,
+        data: response.data, // data ici est directement le tableau
+      }
     } catch (error) {
       console.error("Error fetching contact info:", error)
       return { success: false, data: [], message: "Failed to fetch contact info" }
     }
-  },
+  },  
 
   getContactInfoById: async (id: number): Promise<ContactInfoResponse> => {
     try {
-      const response = await api.get(`/admin/contact-info/${id}`)
+      const response = await api.get(`/api/admin/contact/info/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching contact info with id ${id}:`, error)
@@ -39,7 +44,7 @@ export const contactInfoService = {
 
   createContactInfo: async (contactInfoData: Partial<ContactInfo>): Promise<ContactInfoResponse> => {
     try {
-      const response = await api.post("/admin/contact-info", contactInfoData)
+      const response = await api.post("/api/admin/contact/info", contactInfoData)
       return response.data
     } catch (error) {
       console.error("Error creating contact info:", error)
@@ -49,7 +54,7 @@ export const contactInfoService = {
 
   updateContactInfo: async (id: number, contactInfoData: Partial<ContactInfo>): Promise<ContactInfoResponse> => {
     try {
-      const response = await api.put(`/admin/contact-info/${id}`, contactInfoData)
+      const response = await api.put(`/api/admin/contact/info/${id}`, contactInfoData)
       return response.data
     } catch (error) {
       console.error(`Error updating contact info with id ${id}:`, error)
@@ -59,7 +64,7 @@ export const contactInfoService = {
 
   deleteContactInfo: async (id: number): Promise<ContactInfoResponse> => {
     try {
-      const response = await api.delete(`/admin/contact-info/${id}`)
+      const response = await api.delete(`/api/admin/contact/info/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error deleting contact info with id ${id}:`, error)
@@ -69,7 +74,7 @@ export const contactInfoService = {
 
   updateDisplayOrder: async (id: number, direction: "up" | "down"): Promise<ContactInfoResponse> => {
     try {
-      const response = await api.patch(`/admin/contact-info/${id}/display-order`, { direction })
+      const response = await api.patch(`/api/admin/contact/info/${id}/display-order`, { direction })
       return response.data
     } catch (error) {
       console.error(`Error updating display order for contact info with id ${id}:`, error)

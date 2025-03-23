@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { MoreHorizontal, Plus, ArrowUp, ArrowDown } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -24,8 +24,9 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { useToast } from "@/hooks/use-toast"
+import { contactSubjectService } from "@/services/contactSubjectService"
 
-type ContactSubject = {
+interface ContactSubject {
   id: number
   value: string
   label: string
@@ -34,51 +35,8 @@ type ContactSubject = {
   updated_at: string
 }
 
-const initialSubjects: ContactSubject[] = [
-  {
-    id: 1,
-    value: "information",
-    label: "Demande d'information",
-    display_order: 1,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 2,
-    value: "commande",
-    label: "Question sur une commande",
-    display_order: 2,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 3,
-    value: "service",
-    label: "Réservation de service",
-    display_order: 3,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 4,
-    value: "reclamation",
-    label: "Réclamation",
-    display_order: 4,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-  {
-    id: 5,
-    value: "autre",
-    label: "Autre",
-    display_order: 5,
-    created_at: "2025-03-18 02:29:03",
-    updated_at: "2025-03-18 02:29:03",
-  },
-]
-
 export default function ContactSubjectsPage() {
-  const [subjects, setSubjects] = useState<ContactSubject[]>(initialSubjects)
+  const [subjects, setSubjects] = useState<ContactSubject[]>([])
   const [isAddDialogOpen, setIsAddDialogOpen] = useState(false)
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [isDeleteDialogOpen, setIsDeleteDialogOpen] = useState(false)
@@ -88,101 +46,163 @@ export default function ContactSubjectsPage() {
     label: "",
     display_order: 0,
   })
+  const [loading, setLoading] = useState(true)
+  const [submitting, setSubmitting] = useState(false)
   const { toast } = useToast()
 
-  const handleAddSubject = () => {
-    const id = Math.max(...subjects.map((subject) => subject.id)) + 1
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
+  useEffect(() => {
+    fetchSubjects()
+  }, [])
 
-    const subject: ContactSubject = {
-      id,
-      value: newSubject.value || "",
-      label: newSubject.label || "",
-      display_order: newSubject.display_order || subjects.length + 1,
-      created_at: now,
-      updated_at: now,
+  const fetchSubjects = async () => {
+    try {
+      setLoading(true)
+      const response = await contactSubjectService.getAllSubjects()
+      if (response.success) {
+        setSubjects(response.data)
+      } else {
+        throw new Error(response.message || "Failed to fetch subjects")
+      }
+    } catch (error) {
+      console.error("Error fetching subjects:", error)
+      toast({
+        title: "Error",
+        description: "Failed to load contact subjects. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
     }
-
-    setSubjects([...subjects, subject])
-    setNewSubject({
-      value: "",
-      label: "",
-      display_order: 0,
-    })
-    setIsAddDialogOpen(false)
-
-    toast({
-      title: "Subject added",
-      description: `"${subject.label}" has been added successfully.`,
-    })
   }
 
-  const handleEditSubject = () => {
+  const handleAddSubject = async () => {
+    try {
+      setSubmitting(true)
+      const response = await contactSubjectService.createSubject(newSubject)
+
+      if (response.success) {
+        await fetchSubjects()
+        setIsAddDialogOpen(false)
+        setNewSubject({
+          value: "",
+          label: "",
+          display_order: 0,
+        })
+
+        toast({
+          title: "Subject added",
+          description: `"${response.data.label}" has been added successfully.`,
+        })
+      } else {
+        throw new Error(response.message || "Failed to add subject")
+      }
+    } catch (error) {
+      console.error("Error adding subject:", error)
+      toast({
+        title: "Error",
+        description: "Failed to add contact subject. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const handleEditSubject = async () => {
     if (!currentSubject) return
 
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
-    const updatedSubject = {
-      ...currentSubject,
-      updated_at: now,
+    try {
+      setSubmitting(true)
+      const response = await contactSubjectService.updateSubject(currentSubject.id, currentSubject)
+
+      if (!response || response.success === false) {
+        throw new Error(response.message || "Échec de l'opération")
+      }
+    } catch (error) {
+      console.error("Error updating subject:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update contact subject. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
     }
-
-    setSubjects(subjects.map((subject) => (subject.id === currentSubject.id ? updatedSubject : subject)))
-    setIsEditDialogOpen(false)
-
-    toast({
-      title: "Subject updated",
-      description: `"${currentSubject.label}" has been updated successfully.`,
-    })
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+    
   }
 
-  const handleDeleteSubject = () => {
+  const handleDeleteSubject = async () => {
     if (!currentSubject) return
 
-    setSubjects(subjects.filter((subject) => subject.id !== currentSubject.id))
-    setIsDeleteDialogOpen(false)
+    try {
+      setSubmitting(true)
+      const response = await contactSubjectService.deleteSubject(currentSubject.id)
 
-    toast({
-      title: "Subject deleted",
-      description: `"${currentSubject.label}" has been deleted successfully.`,
-    })
+      if (!response || response.success === false) {
+        throw new Error(response.message || "Échec de l'opération")
+      }
+    } catch (error) {
+      console.error("Error deleting subject:", error)
+      toast({
+        title: "Error",
+        description: "Failed to delete contact subject. Please try again.",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+    
   }
 
-  const moveOrder = (id: number, direction: "up" | "down") => {
-    const subjectIndex = subjects.findIndex((subject) => subject.id === id)
-    if (subjectIndex === -1) return
+  const moveOrder = async (id: number, direction: "up" | "down") => {
+    try {
+      // Get the current subject and the one to swap with
+      const currentIndex = subjects.findIndex((subject) => subject.id === id)
+      if (currentIndex === -1) return
 
-    const newSubjects = [...subjects]
+      const newSubjects = [...subjects]
+      let targetIndex: number
 
-    if (direction === "up" && subjectIndex > 0) {
-      // Swap with the previous item
-      const temp = newSubjects[subjectIndex].display_order
-      newSubjects[subjectIndex].display_order = newSubjects[subjectIndex - 1].display_order
-      newSubjects[subjectIndex - 1].display_order = temp
+      if (direction === "up" && currentIndex > 0) {
+        targetIndex = currentIndex - 1
+      } else if (direction === "down" && currentIndex < newSubjects.length - 1) {
+        targetIndex = currentIndex + 1
+      } else {
+        return // Can't move further in this direction
+      }
 
-      // Also swap the items in the array for immediate visual feedback
-      ;[newSubjects[subjectIndex], newSubjects[subjectIndex - 1]] = [
-        newSubjects[subjectIndex - 1],
-        newSubjects[subjectIndex],
+      // Prepare the orders to update
+      const ordersToUpdate = [
+        { id: newSubjects[currentIndex].id, display_order: newSubjects[targetIndex].display_order },
+        { id: newSubjects[targetIndex].id, display_order: newSubjects[currentIndex].display_order },
       ]
-    } else if (direction === "down" && subjectIndex < newSubjects.length - 1) {
-      // Swap with the next item
-      const temp = newSubjects[subjectIndex].display_order
-      newSubjects[subjectIndex].display_order = newSubjects[subjectIndex + 1].display_order
-      newSubjects[subjectIndex + 1].display_order = temp
 
-      // Also swap the items in the array for immediate visual feedback
-      ;[newSubjects[subjectIndex], newSubjects[subjectIndex + 1]] = [
-        newSubjects[subjectIndex + 1],
-        newSubjects[subjectIndex],
-      ]
+      const response = await contactSubjectService.reorderSubjects(ordersToUpdate)
+
+      if (response.success) {
+        await fetchSubjects()
+
+        toast({
+          title: "Order updated",
+          description: `Subject moved ${direction}.`,
+        })
+      } else {
+        throw new Error(response.message || "Failed to update display order")
+      }
+    } catch (error) {
+      console.error("Error updating display order:", error)
+      toast({
+        title: "Error",
+        description: "Failed to update display order. Please try again.",
+        variant: "destructive",
+      })
     }
-
-    setSubjects(newSubjects)
-
-    toast({
-      title: "Order updated",
-      description: `Subject moved ${direction}.`,
-    })
   }
 
   const columns: ColumnDef<ContactSubject>[] = [
@@ -272,6 +292,14 @@ export default function ContactSubjectsPage() {
     },
   ]
 
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-64">
+        <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-primary"></div>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
@@ -329,10 +357,19 @@ export default function ContactSubjectsPage() {
             </div>
           </div>
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsAddDialogOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleAddSubject}>Save</Button>
+            <Button onClick={handleAddSubject} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+                  Saving...
+                </>
+              ) : (
+                "Save"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -381,10 +418,19 @@ export default function ContactSubjectsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsEditDialogOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button onClick={handleEditSubject}>Save Changes</Button>
+            <Button onClick={handleEditSubject} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -405,11 +451,18 @@ export default function ContactSubjectsPage() {
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)}>
+            <Button variant="outline" onClick={() => setIsDeleteDialogOpen(false)} disabled={submitting}>
               Cancel
             </Button>
-            <Button variant="destructive" onClick={handleDeleteSubject}>
-              Delete
+            <Button variant="destructive" onClick={handleDeleteSubject} disabled={submitting}>
+              {submitting ? (
+                <>
+                  <div className="mr-2 h-4 w-4 animate-spin rounded-full border-2 border-background border-t-transparent"></div>
+                  Deleting...
+                </>
+              ) : (
+                "Delete"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

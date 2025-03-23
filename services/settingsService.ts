@@ -1,59 +1,49 @@
 import api from "./apis"
 
+export interface Setting {
+  key: string
+  value: string
+}
+
 export const settingsService = {
-  // Récupérer tous les paramètres
   getAllSettings: async () => {
     try {
-      const response = await api.get("/admin/settings")
+      const response = await api.get("/api/admin/settings")
       return response.data
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching settings:", error)
-      return {
-        success: false,
-        message: "Erreur lors de la récupération des paramètres",
-      }
+      throw error.response?.data || { message: "Failed to fetch settings" }
     }
   },
 
-  // Récupérer un paramètre par sa clé
   getSettingByKey: async (key: string) => {
     try {
-      const response = await api.get(`/admin/settings/${key}`)
+      const response = await api.get(`/api/admin/settings/${key}`)
       return response.data
-    } catch (error) {
-      console.error(`Error fetching setting ${key}:`, error)
-      return {
-        success: false,
-        message: "Erreur lors de la récupération du paramètre",
-      }
+    } catch (error: any) {
+      console.error(`Error fetching setting with key ${key}:`, error)
+      throw error.response?.data || { message: "Failed to fetch setting" }
     }
   },
 
-  // Mettre à jour un paramètre
   updateSetting: async (key: string, value: string) => {
     try {
-      const response = await api.put(`/admin/settings/${key}`, { value })
+      const response = await api.put(`/api/admin/settings/${key}`, { value })
       return response.data
-    } catch (error) {
-      console.error(`Error updating setting ${key}:`, error)
-      return {
-        success: false,
-        message: "Erreur lors de la mise à jour du paramètre",
-      }
+    } catch (error: any) {
+      console.error(`Error updating setting with key ${key}:`, error)
+      throw error.response?.data || { message: "Failed to update setting" }
     }
   },
 
-  // Mettre à jour plusieurs paramètres à la fois
-  updateMultipleSettings: async (settings: { key: string; value: string }[]) => {
+  // Modifié pour accepter un tableau de paramètres au lieu d'un objet
+  updateMultipleSettings: async (settings: Setting[]) => {
     try {
-      const response = await api.put("/admin/settings", { settings })
+      const response = await api.put("/api/admin/settings", settings)
       return response.data
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error updating multiple settings:", error)
-      return {
-        success: false,
-        message: "Erreur lors de la mise à jour des paramètres",
-      }
+      throw error.response?.data || { message: "Failed to update settings" }
     }
   },
 }

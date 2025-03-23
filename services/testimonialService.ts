@@ -4,7 +4,7 @@ export const testimonialService = {
   // Récupérer tous les témoignages
   getAllTestimonials: async () => {
     try {
-      const response = await api.get("/admin/testimonials")
+      const response = await api.get("/api/admin/testimonials")
       return response.data
     } catch (error) {
       console.error("Error fetching testimonials:", error)
@@ -18,7 +18,7 @@ export const testimonialService = {
   // Récupérer les témoignages mis en avant
   getFeaturedTestimonials: async () => {
     try {
-      const response = await api.get("/admin/testimonials/featured")
+      const response = await api.get("/api/admin/testimonials/featured")
       return response.data
     } catch (error) {
       console.error("Error fetching featured testimonials:", error)
@@ -32,7 +32,7 @@ export const testimonialService = {
   // Récupérer un témoignage par son ID
   getTestimonialById: async (id: number) => {
     try {
-      const response = await api.get(`/admin/testimonials/${id}`)
+      const response = await api.get(`/api/admin/testimonials/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching testimonial ${id}:`, error)
@@ -59,7 +59,7 @@ export const testimonialService = {
         formData.append("image", testimonialData.image)
       }
 
-      const response = await api.post("/admin/testimonials", formData, {
+      const response = await api.post("/api/admin/testimonials", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -96,7 +96,7 @@ export const testimonialService = {
         formData.append("image", testimonialData.image)
       }
 
-      const response = await api.put(`/admin/testimonials/${id}`, formData, {
+      const response = await api.put(`/api/admin/testimonials/${id}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -115,7 +115,7 @@ export const testimonialService = {
   // Supprimer un témoignage
   deleteTestimonial: async (id: number) => {
     try {
-      const response = await api.delete(`/admin/testimonials/${id}`)
+      const response = await api.delete(`/api/admin/testimonials/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error deleting testimonial ${id}:`, error)
@@ -129,7 +129,7 @@ export const testimonialService = {
   // Basculer le statut "mis en avant" d'un témoignage
   toggleFeatured: async (id: number, isFeatured: boolean) => {
     try {
-      const response = await api.patch(`/admin/testimonials/${id}/featured`, {
+      const response = await api.patch(`/api/admin/testimonials/${id}/featured`, {
         is_featured: isFeatured,
       })
       return response.data

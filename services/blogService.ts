@@ -4,7 +4,7 @@ export const blogService = {
   // Récupérer tous les articles
   getAllPosts: async () => {
     try {
-      const response = await api.get("/admin/blog")
+      const response = await api.get("/api/admin/blog")
       return response.data
     } catch (error) {
       console.error("Error fetching blog posts:", error)
@@ -18,7 +18,7 @@ export const blogService = {
   // Récupérer un article par son ID
   getPostById: async (id: number) => {
     try {
-      const response = await api.get(`/admin/blog/${id}`)
+      const response = await api.get(`/api/admin/blog/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching blog post ${id}:`, error)
@@ -32,7 +32,7 @@ export const blogService = {
   // Récupérer un article par son slug
   getPostBySlug: async (slug: string) => {
     try {
-      const response = await api.get(`/admin/blog/slug/${slug}`)
+      const response = await api.get(`/api/admin/blog/slug/${slug}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching blog post with slug ${slug}:`, error)
@@ -60,9 +60,11 @@ export const blogService = {
       // Ajouter l'image si elle existe
       if (postData.image instanceof File) {
         formData.append("image", postData.image)
+      } else if (typeof postData.image === "string") {
+        formData.append("imageUrl", postData.image)
       }
 
-      const response = await api.post("/admin/blog", formData, {
+      const response = await api.post("/api/admin/blog", formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -95,9 +97,11 @@ export const blogService = {
       // Ajouter l'image si elle existe
       if (postData.image instanceof File) {
         formData.append("image", postData.image)
+      } else if (typeof postData.image === "string" && postData.image.startsWith("http")) {
+        formData.append("imageUrl", postData.image)
       }
 
-      const response = await api.put(`/admin/blog/${id}`, formData, {
+      const response = await api.put(`/api/admin/blog/${id}`, formData, {
         headers: {
           "Content-Type": "multipart/form-data",
         },
@@ -116,7 +120,7 @@ export const blogService = {
   // Supprimer un article
   deletePost: async (id: number) => {
     try {
-      const response = await api.delete(`/admin/blog/${id}`)
+      const response = await api.delete(`/api/admin/blog/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error deleting blog post ${id}:`, error)
@@ -130,7 +134,7 @@ export const blogService = {
   // Incrémenter les likes d'un article
   incrementLikes: async (id: number) => {
     try {
-      const response = await api.patch(`/admin/blog/${id}/like`)
+      const response = await api.patch(`/api/admin/blog/${id}/like`)
       return response.data
     } catch (error) {
       console.error(`Error incrementing likes for blog post ${id}:`, error)

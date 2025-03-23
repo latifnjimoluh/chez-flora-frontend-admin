@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
 import { ArrowUpDown, MoreHorizontal, Edit } from "lucide-react"
 import { Button } from "@/components/ui/button"
@@ -17,6 +17,7 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+
   DialogFooter,
   DialogHeader,
   DialogTitle,
@@ -26,6 +27,8 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { format } from "date-fns"
+import { siteContentService } from "@/services/siteContentService"
+
 
 type SiteContent = {
   id: number
@@ -35,112 +38,69 @@ type SiteContent = {
   updated_at: string
 }
 
-const initialContents: SiteContent[] = [
-  {
-    id: 12,
-    content_key: "about_text",
-    content_value:
-      "ChezFlora est née d'une passion pour la beauté naturelle des fleurs et d'un désir de partager cette élégance avec le monde. Nous créons des compositions florales uniques qui apportent joie et sérénité dans votre quotidien.",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 11,
-    content_key: "hero_title",
-    content_value: "Offrez un peu de nature et d'élégance avec ChezFlora",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 10,
-    content_key: "hero_background_url",
-    content_value: "/placeholder.svg?height=600&width=1920",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 8,
-    content_key: "site_description",
-    content_value:
-      "Votre fleuriste artisanal, spécialisé dans les compositions florales élégantes et naturelles pour tous vos moments de vie.",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 9,
-    content_key: "logo_url",
-    content_value: "/placeholder.svg?height=50&width=150",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 13,
-    content_key: "feature_delivery_title",
-    content_value: "Livraison rapide",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 14,
-    content_key: "feature_delivery_text",
-    content_value: "Vos fleurs livrées en parfait état, dans les meilleurs délais",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 15,
-    content_key: "feature_personalization_title",
-    content_value: "Personnalisation",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 16,
-    content_key: "feature_personalization_text",
-    content_value: "Des bouquets sur mesure, adaptés à vos goûts et occasions",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 17,
-    content_key: "feature_decoration_title",
-    content_value: "Décoration florale",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-  {
-    id: 18,
-    content_key: "feature_decoration_text",
-    content_value: "Des créations uniques pour sublimer vos espaces et événements",
-    created_at: "2025-03-20 04:43:11",
-    updated_at: "2025-03-20 04:43:11",
-  },
-]
-
 export default function ContentPage() {
-  const [contents, setContents] = useState<SiteContent[]>(initialContents)
+  const [contents, setContents] = useState<SiteContent[]>([])
   const [isEditDialogOpen, setIsEditDialogOpen] = useState(false)
   const [currentContent, setCurrentContent] = useState<SiteContent | null>(null)
   const { toast } = useToast()
 
-  const handleEditContent = () => {
-    if (!currentContent) return
+  useEffect(() => {
+    fetchContents()
+  }, [])
+  
+  const fetchContents = async () => {
+    const data = await siteContentService.getAllContent()
+  
+    if (data.success && Array.isArray(data.data)) {
+      setContents(data.data) // ✅ Affiche bien la liste
+    } else {
+      toast({
+        title: "Erreur",
+        description: data.message || "Impossible de charger le contenu du site",
+        variant: "destructive",
+      })
+    }
+  }
+  
+  
 
-    const now = new Date().toISOString().replace("T", " ").substring(0, 19)
-    const updatedContent = {
-      ...currentContent,
-      updated_at: now,
+  const handleEditContent = async () => {
+    if (!currentContent) return
+  
+    const isImage = currentContent.content_key.includes("_url")
+  
+    const payload: any = {}
+
+    if (
+      (currentContent.content_key.includes("_url") || currentContent.content_key.includes("_image")) &&
+      (currentContent as any).file instanceof File
+    ) {
+      payload.file = (currentContent as any).file
+    } else {
+      payload.content_value = currentContent.content_value
     }
 
-    setContents(contents.map((content) => (content.id === currentContent.id ? updatedContent : content)))
-    setIsEditDialogOpen(false)
+    const result = await siteContentService.updateContent(currentContent.content_key, payload)
 
+      
+    if (result.success === false) {
+      toast({
+        title: "Erreur",
+        description: result.message || "La mise à jour a échoué",
+        variant: "destructive",
+      })
+      return
+    }
+  
     toast({
-      title: "Content updated",
-      description: `${currentContent.content_key} has been updated successfully.`,
+      title: "Contenu mis à jour",
+      description: `${currentContent.content_key} a été mis à jour.`,
     })
+  
+    setIsEditDialogOpen(false)
+    fetchContents()
   }
-
+  
   const formatDate = (dateString: string) => {
     return format(new Date(dateString), "PPP")
   }
@@ -239,19 +199,24 @@ export default function ContentPage() {
                 <Label htmlFor="content_key">Content Key</Label>
                 <Input id="content_key" value={currentContent.content_key} disabled className="bg-muted" />
               </div>
-              {currentContent.content_key.includes("_url") ? (
+              {currentContent.content_key.includes("_url") || currentContent.content_key.includes("_image") ? (
                 <div className="space-y-2">
-                  <Label htmlFor="content_value">URL</Label>
+                  <Label htmlFor="file">Fichier image</Label>
                   <Input
-                    id="content_value"
-                    value={currentContent.content_value}
-                    onChange={(e) => setCurrentContent({ ...currentContent, content_value: e.target.value })}
+                    id="file"
+                    type="file"
+                    accept="image/*"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      setCurrentContent({ ...currentContent, file, content_value: URL.createObjectURL(file) });
+                    }}
                   />
                   {currentContent.content_value && (
                     <div className="mt-2">
-                      <p className="text-sm font-medium mb-1">Preview:</p>
+                      <p className="text-sm font-medium mb-1">Aperçu :</p>
                       <img
-                        src={currentContent.content_value || "/placeholder.svg"}
+                        src={currentContent.content_value}
                         alt="Preview"
                         className="max-h-[200px] rounded-md border"
                       />
@@ -259,6 +224,7 @@ export default function ContentPage() {
                   )}
                 </div>
               ) : (
+
                 <div className="space-y-2">
                   <Label htmlFor="content_value">Content</Label>
                   <Textarea

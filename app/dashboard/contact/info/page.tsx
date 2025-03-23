@@ -123,26 +123,31 @@ export default function ContactInfoPage() {
     } finally {
       setSubmitting(false)
     }
+
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+    
   }
 
   const handleEditInfo = async () => {
     if (!currentInfo) return
-
+  
     try {
       setSubmitting(true)
-      const response = await contactInfoService.updateContactInfo(currentInfo.id, currentInfo)
-
-      if (response.success) {
-        await fetchContactInfo()
-        setIsEditDialogOpen(false)
-
-        toast({
-          title: "Contact info updated",
-          description: `${currentInfo.type.charAt(0).toUpperCase() + currentInfo.type.slice(1)} information has been updated successfully.`,
-        })
-      } else {
-        throw new Error(response.message || "Failed to update contact info")
+  
+      const { type, value, icon, display_order } = currentInfo
+      const response = await contactInfoService.updateContactInfo(currentInfo.id, {
+        type,
+        value,
+        icon,
+        display_order,
+      })
+  
+      if (!response || response.success === false) {
+        throw new Error(response.message || "Échec de l'opération")
       }
+      
     } catch (error) {
       console.error("Error updating contact info:", error)
       toast({
@@ -153,7 +158,12 @@ export default function ContactInfoPage() {
     } finally {
       setSubmitting(false)
     }
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+    
   }
+  
 
   const handleDeleteInfo = async () => {
     if (!currentInfo) return
@@ -162,17 +172,10 @@ export default function ContactInfoPage() {
       setSubmitting(true)
       const response = await contactInfoService.deleteContactInfo(currentInfo.id)
 
-      if (response.success) {
-        await fetchContactInfo()
-        setIsDeleteDialogOpen(false)
-
-        toast({
-          title: "Contact info deleted",
-          description: `${currentInfo.type.charAt(0).toUpperCase() + currentInfo.type.slice(1)} information has been deleted successfully.`,
-        })
-      } else {
-        throw new Error(response.message || "Failed to delete contact info")
+      if (!response || response.success === false) {
+        throw new Error(response.message || "Échec de l'opération")
       }
+      
     } catch (error) {
       console.error("Error deleting contact info:", error)
       toast({
@@ -183,6 +186,11 @@ export default function ContactInfoPage() {
     } finally {
       setSubmitting(false)
     }
+    setTimeout(() => {
+      window.location.reload()
+    }, 2000)
+    
+    
   }
 
   const moveOrder = async (id: number, direction: "up" | "down") => {
@@ -419,14 +427,14 @@ export default function ContactInfoPage() {
             <div className="space-y-2">
               <Label htmlFor="icon">Icon</Label>
               <Select
-                value={newInfo.icon || ""}
-                onValueChange={(value) => setNewInfo({ ...newInfo, icon: value || null })}
+                value={newInfo.icon || "none"}
+                onValueChange={(value) => setNewInfo({ ...newInfo, icon: value === "none" ? null : value })}
               >
                 <SelectTrigger>
                   <SelectValue placeholder="Select icon" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">None</SelectItem>
+                  <SelectItem value="none">None</SelectItem>
                   {iconOptions.map((icon) => (
                     <SelectItem key={icon.value} value={icon.value}>
                       <div className="flex items-center">

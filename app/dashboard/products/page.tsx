@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { ArrowUpDown, MoreHorizontal, Plus, Image, Loader2 } from 'lucide-react'
+import { ArrowUpDown, MoreHorizontal, Plus, Image, Loader2, Upload, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import {
@@ -27,15 +29,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
-import { 
-  getAllProducts, 
-  createProduct, 
-  updateProduct, 
-  deleteProduct, 
-  updateProductStatus, 
-  updateProductFeatured 
-} from "@/services/productApi"
+import { getAllProducts, createProduct, updateProduct, deleteProduct } from "@/services/productApi"
 import { getAllCategories } from "@/services/categoryApi"
+import { uploadMultipleImagesToCloudinary } from "@/services/cloudinaryService"
+import { uploadMultipleImagesByType } from "@/services/cloudinaryService";
 
 type Product = {
   id_produit: string
@@ -87,6 +84,16 @@ export default function ProductsPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const { toast } = useToast()
 
+  // Références pour les input file
+  const addImageInputRef = useRef<HTMLInputElement>(null)
+  const editImageInputRef = useRef<HTMLInputElement>(null)
+
+  // États pour les images sélectionnées
+  const [selectedAddImages, setSelectedAddImages] = useState<File[]>([])
+  const [selectedEditImages, setSelectedEditImages] = useState<File[]>([])
+  const [previewAddImages, setPreviewAddImages] = useState<string[]>([])
+  const [previewEditImages, setPreviewEditImages] = useState<string[]>([])
+
   useEffect(() => {
     fetchProducts()
     fetchCategories()
@@ -99,7 +106,6 @@ export default function ProductsPage() {
       console.log("✅ Produits récupérés :", response)
 
       setProducts(response.data || [])
-
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -115,10 +121,10 @@ export default function ProductsPage() {
     try {
       const data = await getAllCategories()
       setCategories(data)
-      
+
       // Si c'est le premier chargement, définir la catégorie par défaut
       if (newProduct.categorie === "" && data.length > 0) {
-        setNewProduct(prev => ({ ...prev, categorie: data[0].nom }))
+        setNewProduct((prev) => ({ ...prev, categorie: data[0].nom }))
       }
     } catch (error: any) {
       toast({
@@ -127,6 +133,54 @@ export default function ProductsPage() {
         variant: "destructive",
       })
     }
+  }
+
+  const handleAddImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    const newFiles = Array.from(files)
+    setSelectedAddImages((prev) => [...prev, ...newFiles])
+
+    // Générer des aperçus pour les nouvelles images
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file))
+    setPreviewAddImages((prev) => [...prev, ...newPreviews])
+  }
+
+  const handleEditImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    const newFiles = Array.from(files)
+    setSelectedEditImages((prev) => [...prev, ...newFiles])
+
+    // Générer des aperçus pour les nouvelles images
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file))
+    setPreviewEditImages((prev) => [...prev, ...newPreviews])
+  }
+
+  const removeAddImage = (index: number) => {
+    setSelectedAddImages((prev) => prev.filter((_, i) => i !== index))
+
+    // Libérer l'URL de l'aperçu
+    URL.revokeObjectURL(previewAddImages[index])
+    setPreviewAddImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const removeEditImage = (index: number) => {
+    setSelectedEditImages((prev) => prev.filter((_, i) => i !== index))
+
+    // Libérer l'URL de l'aperçu
+    URL.revokeObjectURL(previewEditImages[index])
+    setPreviewEditImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const removeExistingImage = (index: number) => {
+    if (!currentProduct) return
+
+    const updatedImages = [...currentProduct.images]
+    updatedImages.splice(index, 1)
+    setCurrentProduct({ ...currentProduct, images: updatedImages })
   }
 
   const handleAddProduct = async () => {
@@ -141,11 +195,19 @@ export default function ProductsPage() {
 
     setActionLoading(true)
     try {
+      // Upload des images sélectionnées vers Cloudinary
+      let imageUrls: string[] = []
+      if (selectedAddImages.length > 0) {
+
+        imageUrls = await uploadMultipleImagesByType(selectedAddImages, "produit");
+        
+      }
+
       await createProduct({
         nom: newProduct.nom,
         description: newProduct.description || "",
         categorie: newProduct.categorie,
-        images: newProduct.images || [],
+        images: imageUrls,
         prix: newProduct.prix || 0,
         stock: newProduct.stock || 0,
         dimensions: newProduct.dimensions || null,
@@ -177,6 +239,12 @@ export default function ProductsPage() {
         mis_en_avant: false,
         statut: "Disponible",
       })
+
+      // Réinitialiser les images
+      setSelectedAddImages([])
+      // Libérer les URLs des aperçus
+      previewAddImages.forEach((url) => URL.revokeObjectURL(url))
+      setPreviewAddImages([])
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -193,11 +261,20 @@ export default function ProductsPage() {
 
     setActionLoading(true)
     try {
+      // Upload des nouvelles images sélectionnées vers Cloudinary
+      let newImageUrls: string[] = []
+      if (selectedEditImages.length > 0) {
+        newImageUrls  = await uploadMultipleImagesByType(selectedAddImages, "produit");
+      }
+
+      // Combiner les images existantes avec les nouvelles
+      const allImages = [...currentProduct.images, ...newImageUrls]
+
       await updateProduct(currentProduct.id_produit, {
         nom: currentProduct.nom,
         description: currentProduct.description,
         categorie: currentProduct.categorie,
-        images: currentProduct.images,
+        images: allImages,
         prix: currentProduct.prix,
         stock: currentProduct.stock,
         dimensions: currentProduct.dimensions,
@@ -215,6 +292,12 @@ export default function ProductsPage() {
 
       fetchProducts()
       setIsEditDialogOpen(false)
+
+      // Réinitialiser les images
+      setSelectedEditImages([])
+      // Libérer les URLs des aperçus
+      previewEditImages.forEach((url) => URL.revokeObjectURL(url))
+      setPreviewEditImages([])
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -381,6 +464,9 @@ export default function ProductsPage() {
                 onClick={() => {
                   setCurrentProduct(product)
                   setIsEditDialogOpen(true)
+                  // Réinitialiser les images d'édition
+                  setSelectedEditImages([])
+                  setPreviewEditImages([])
                 }}
               >
                 Modifier
@@ -474,7 +560,7 @@ export default function ProductsPage() {
                 </Select>
               </div>
               <div className="space-y-2">
-                <Label htmlFor="prix">Prix (€)</Label>
+                <Label htmlFor="prix">Prix (XAF)</Label>
                 <Input
                   id="prix"
                   type="number"
@@ -563,16 +649,51 @@ export default function ProductsPage() {
               />
               <Label htmlFor="mis_en_avant">Produit mis en avant</Label>
             </div>
+
+            {/* Upload d'images */}
             <div className="space-y-2">
-              <Label htmlFor="images">Images (URLs, séparées par des virgules)</Label>
-              <Textarea
-                id="images"
-                placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
-                value={newProduct.images?.join(", ") || ""}
-                onChange={(e) =>
-                  setNewProduct({ ...newProduct, images: e.target.value.split(",").map((url) => url.trim()) })
-                }
-              />
+              <Label htmlFor="images">Images</Label>
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => addImageInputRef.current?.click()}
+              >
+                <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                <p className="mt-2 text-sm text-gray-500">Cliquez pour sélectionner des images</p>
+                <p className="text-xs text-gray-400">JPG, PNG, GIF jusqu'à 5MB</p>
+                <input
+                  type="file"
+                  ref={addImageInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={handleAddImageChange}
+                />
+              </div>
+
+              {/* Aperçu des images sélectionnées */}
+              {previewAddImages.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {previewAddImages.map((preview, index) => (
+                    <div key={index} className="relative rounded-md overflow-hidden h-24">
+                      <img
+                        src={preview || "/placeholder.svg"}
+                        alt={`Aperçu ${index}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeAddImage(index)
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -641,7 +762,7 @@ export default function ProductsPage() {
                   </Select>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="edit_prix">Prix (€)</Label>
+                  <Label htmlFor="edit_prix">Prix (XAF)</Label>
                   <Input
                     id="edit_prix"
                     type="number"
@@ -732,16 +853,78 @@ export default function ProductsPage() {
                 />
                 <Label htmlFor="edit_mis_en_avant">Produit mis en avant</Label>
               </div>
+
+              {/* Images existantes */}
               <div className="space-y-2">
-                <Label htmlFor="edit_images">Images (URLs, séparées par des virgules)</Label>
-                <Textarea
-                  id="edit_images"
-                  placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
-                  value={currentProduct.images.join(", ")}
-                  onChange={(e) =>
-                    setCurrentProduct({ ...currentProduct, images: e.target.value.split(",").map((url) => url.trim()) })
-                  }
-                />
+                <Label>Images existantes</Label>
+                {currentProduct.images.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {currentProduct.images.map((image, index) => (
+                      <div key={index} className="relative rounded-md overflow-hidden h-24">
+                        <img
+                          src={image || "/placeholder.svg"}
+                          alt={`Image ${index}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          onClick={() => removeExistingImage(index)}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Aucune image existante</p>
+                )}
+              </div>
+
+              {/* Ajouter de nouvelles images */}
+              <div className="space-y-2">
+                <Label htmlFor="edit_images">Ajouter de nouvelles images</Label>
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => editImageInputRef.current?.click()}
+                >
+                  <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-500">Cliquez pour sélectionner des images</p>
+                  <p className="text-xs text-gray-400">JPG, PNG, GIF jusqu'à 5MB</p>
+                  <input
+                    type="file"
+                    ref={editImageInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                    onChange={handleEditImageChange}
+                  />
+                </div>
+
+                {/* Aperçu des nouvelles images */}
+                {previewEditImages.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {previewEditImages.map((preview, index) => (
+                      <div key={index} className="relative rounded-md overflow-hidden h-24">
+                        <img
+                          src={preview || "/placeholder.svg"}
+                          alt={`Aperçu ${index}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeEditImage(index)
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -828,3 +1011,4 @@ export default function ProductsPage() {
     </div>
   )
 }
+

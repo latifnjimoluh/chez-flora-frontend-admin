@@ -8,15 +8,12 @@ import { Card, CardContent, CardDescription, CardFooter, CardHeader, CardTitle }
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { Save } from "lucide-react"
-import { settingsService } from "@/services/settingsService"
+import { settingsService, type Setting } from "@/services/settingsService"
 
-type Setting = {
-  key: string
-  value: string
-}
+type Settings = Record<string, string>
 
 export default function SettingsPage() {
-  const [settings, setSettings] = useState<Record<string, string>>({
+  const [settings, setSettings] = useState<Settings>({
     prix_livraison: "5.00",
     free_shipping_threshold: "50000",
     express_delivery_fee: "10.00",
@@ -57,7 +54,14 @@ export default function SettingsPage() {
   const handleSaveSettings = async () => {
     try {
       setSaving(true)
-      const response = await settingsService.updateMultipleSettings(settings)
+
+      // Convert settings object to array of key-value pairs
+      const settingsArray: Setting[] = Object.entries(settings).map(([key, value]) => ({
+        key,
+        value,
+      }))
+
+      const response = await settingsService.updateMultipleSettings(settingsArray)
 
       if (response.success) {
         toast({

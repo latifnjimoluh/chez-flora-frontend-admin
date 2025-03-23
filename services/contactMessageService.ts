@@ -4,7 +4,7 @@ export const contactMessageService = {
   // Récupérer tous les messages de contact
   getAllMessages: async () => {
     try {
-      const response = await api.get("/admin/contact-messages")
+      const response = await api.get("/api/admin/contact/messages")
       return response.data
     } catch (error) {
       console.error("Error fetching contact messages:", error)
@@ -18,7 +18,7 @@ export const contactMessageService = {
   // Récupérer un message de contact par son ID
   getMessageById: async (id: number) => {
     try {
-      const response = await api.get(`/admin/contact-messages/${id}`)
+      const response = await api.get(`/api/admin/contact/messages/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error fetching contact message ${id}:`, error)
@@ -32,7 +32,7 @@ export const contactMessageService = {
   // Mettre à jour le statut d'un message
   updateMessageStatus: async (id: number, status: string) => {
     try {
-      const response = await api.patch(`/admin/contact-messages/${id}/status`, { status })
+      const response = await api.patch(`/api/admin/contact/messages/${id}/status`, { status })
       return response.data
     } catch (error) {
       console.error(`Error updating status for contact message ${id}:`, error)
@@ -46,7 +46,7 @@ export const contactMessageService = {
   // Répondre à un message
   replyToMessage: async (id: number, replyText: string) => {
     try {
-      const response = await api.post(`/admin/contact-messages/${id}/reply`, { reply_text: replyText })
+      const response = await api.post(`/api/admin/contact/messages/${id}/reply`, { reply_text: replyText })
       return response.data
     } catch (error) {
       console.error(`Error replying to contact message ${id}:`, error)
@@ -60,7 +60,7 @@ export const contactMessageService = {
   // Supprimer un message
   deleteMessage: async (id: number) => {
     try {
-      const response = await api.delete(`/admin/contact-messages/${id}`)
+      const response = await api.delete(`/api/admin/contact/messages/${id}`)
       return response.data
     } catch (error) {
       console.error(`Error deleting contact message ${id}:`, error)

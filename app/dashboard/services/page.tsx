@@ -1,8 +1,10 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import type React from "react"
+
+import { useState, useEffect, useRef } from "react"
 import type { ColumnDef } from "@tanstack/react-table"
-import { MoreHorizontal, Plus, Image, Loader2 } from 'lucide-react'
+import { MoreHorizontal, Plus, Image, Loader2, Upload, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { DataTable } from "@/components/data-table"
 import {
@@ -27,14 +29,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Textarea } from "@/components/ui/textarea"
 import { Checkbox } from "@/components/ui/checkbox"
 import { useToast } from "@/hooks/use-toast"
-import { 
-  getAllServices, 
-  createService, 
-  updateService, 
-  deleteService, 
-  updateServiceAvailability, 
-  updateServiceFeatured 
-} from "@/services/serviceApi"
+import { getAllServices, createService, updateService, deleteService } from "@/services/serviceApi"
+import { uploadMultipleImagesToCloudinary } from "@/services/cloudinaryService"
+import { uploadMultipleImagesByType } from "@/services/cloudinaryService"
+
 
 type Service = {
   id_service: string
@@ -75,6 +73,16 @@ export default function ServicesPage() {
   const [actionLoading, setActionLoading] = useState(false)
   const { toast } = useToast()
 
+  // Références pour les input file
+  const addImageInputRef = useRef<HTMLInputElement>(null)
+  const editImageInputRef = useRef<HTMLInputElement>(null)
+
+  // États pour les images sélectionnées
+  const [selectedAddImages, setSelectedAddImages] = useState<File[]>([])
+  const [selectedEditImages, setSelectedEditImages] = useState<File[]>([])
+  const [previewAddImages, setPreviewAddImages] = useState<string[]>([])
+  const [previewEditImages, setPreviewEditImages] = useState<string[]>([])
+
   useEffect(() => {
     fetchServices()
   }, [])
@@ -83,11 +91,9 @@ export default function ServicesPage() {
     setIsLoading(true)
     try {
       const response = await getAllServices()
-      console.log("✅ Produits récupérés :", response)
+      console.log("✅ Services récupérés :", response)
 
       setServices(response.data || [])
-
-            
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -97,6 +103,54 @@ export default function ServicesPage() {
     } finally {
       setIsLoading(false)
     }
+  }
+
+  const handleAddImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    const newFiles = Array.from(files)
+    setSelectedAddImages((prev) => [...prev, ...newFiles])
+
+    // Générer des aperçus pour les nouvelles images
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file))
+    setPreviewAddImages((prev) => [...prev, ...newPreviews])
+  }
+
+  const handleEditImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files
+    if (!files) return
+
+    const newFiles = Array.from(files)
+    setSelectedEditImages((prev) => [...prev, ...newFiles])
+
+    // Générer des aperçus pour les nouvelles images
+    const newPreviews = newFiles.map((file) => URL.createObjectURL(file))
+    setPreviewEditImages((prev) => [...prev, ...newPreviews])
+  }
+
+  const removeAddImage = (index: number) => {
+    setSelectedAddImages((prev) => prev.filter((_, i) => i !== index))
+
+    // Libérer l'URL de l'aperçu
+    URL.revokeObjectURL(previewAddImages[index])
+    setPreviewAddImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const removeEditImage = (index: number) => {
+    setSelectedEditImages((prev) => prev.filter((_, i) => i !== index))
+
+    // Libérer l'URL de l'aperçu
+    URL.revokeObjectURL(previewEditImages[index])
+    setPreviewEditImages((prev) => prev.filter((_, i) => i !== index))
+  }
+
+  const removeExistingImage = (index: number) => {
+    if (!currentService) return
+
+    const updatedImages = [...currentService.images]
+    updatedImages.splice(index, 1)
+    setCurrentService({ ...currentService, images: updatedImages })
   }
 
   const handleAddService = async () => {
@@ -111,16 +165,22 @@ export default function ServicesPage() {
 
     setActionLoading(true)
     try {
+      // Upload des images sélectionnées vers Cloudinary
+      let imageUrls: string[] = []
+      if (selectedAddImages.length > 0) {
+        imageUrls = await uploadMultipleImagesByType(selectedAddImages, "service")
+      }
+
       await createService({
         nom: newService.nom,
         description: newService.description || "",
         categorie: newService.categorie as "Mariage" | "Entreprise" | "Espaces commerciaux" | "Jardins",
-        images: newService.images || [],
+        images: imageUrls,
         tarification: newService.tarification || "",
         disponibilite: newService.disponibilite !== undefined ? newService.disponibilite : true,
         dimension: newService.dimension || "",
         nb_personnes: newService.nb_personnes || 0,
-        lieu: newService.lieu as "intérieur" | "extérieur" || "intérieur",
+        lieu: (newService.lieu as "intérieur" | "extérieur") || "intérieur",
         mis_en_avant: newService.mis_en_avant || false,
       })
 
@@ -143,6 +203,12 @@ export default function ServicesPage() {
         nb_personnes: 0,
         lieu: "intérieur",
       })
+
+      // Réinitialiser les images
+      setSelectedAddImages([])
+      // Libérer les URLs des aperçus
+      previewAddImages.forEach((url) => URL.revokeObjectURL(url))
+      setPreviewAddImages([])
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -159,11 +225,21 @@ export default function ServicesPage() {
 
     setActionLoading(true)
     try {
+      // Upload des nouvelles images sélectionnées vers Cloudinary
+      let newImageUrls: string[] = []
+      if (selectedEditImages.length > 0) {
+        newImageUrls = await uploadMultipleImagesByType(selectedEditImages, "service")
+
+              }
+
+      // Combiner les images existantes avec les nouvelles
+      const allImages = [...currentService.images, ...newImageUrls]
+
       await updateService(currentService.id_service, {
         nom: currentService.nom,
         description: currentService.description,
         categorie: currentService.categorie,
-        images: currentService.images,
+        images: allImages,
         tarification: currentService.tarification,
         disponibilite: currentService.disponibilite,
         dimension: currentService.dimension,
@@ -179,6 +255,12 @@ export default function ServicesPage() {
 
       fetchServices()
       setIsEditDialogOpen(false)
+
+      // Réinitialiser les images
+      setSelectedEditImages([])
+      // Libérer les URLs des aperçus
+      previewEditImages.forEach((url) => URL.revokeObjectURL(url))
+      setPreviewEditImages([])
     } catch (error: any) {
       toast({
         title: "Erreur",
@@ -342,6 +424,9 @@ export default function ServicesPage() {
                 onClick={() => {
                   setCurrentService(service)
                   setIsEditDialogOpen(true)
+                  // Réinitialiser les images d'édition
+                  setSelectedEditImages([])
+                  setPreviewEditImages([])
                 }}
               >
                 Modifier
@@ -494,16 +579,51 @@ export default function ServicesPage() {
               />
               <Label htmlFor="mis_en_avant">Service mis en avant</Label>
             </div>
+
+            {/* Upload d'images */}
             <div className="space-y-2">
-              <Label htmlFor="images">Images (URLs, séparées par des virgules)</Label>
-              <Textarea
-                id="images"
-                placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
-                value={newService.images?.join(", ") || ""}
-                onChange={(e) =>
-                  setNewService({ ...newService, images: e.target.value.split(",").map((url) => url.trim()) })
-                }
-              />
+              <Label htmlFor="images">Images</Label>
+              <div
+                className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                onClick={() => addImageInputRef.current?.click()}
+              >
+                <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                <p className="mt-2 text-sm text-gray-500">Cliquez pour sélectionner des images</p>
+                <p className="text-xs text-gray-400">JPG, PNG, GIF jusqu'à 5MB</p>
+                <input
+                  type="file"
+                  ref={addImageInputRef}
+                  className="hidden"
+                  accept="image/*"
+                  multiple
+                  onChange={handleAddImageChange}
+                />
+              </div>
+
+              {/* Aperçu des images sélectionnées */}
+              {previewAddImages.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 mt-2">
+                  {previewAddImages.map((preview, index) => (
+                    <div key={index} className="relative rounded-md overflow-hidden h-24">
+                      <img
+                        src={preview || "/placeholder.svg"}
+                        alt={`Aperçu ${index}`}
+                        className="w-full h-full object-cover"
+                      />
+                      <button
+                        type="button"
+                        className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          removeAddImage(index)
+                        }}
+                      >
+                        <X className="h-3 w-3" />
+                      </button>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
           <DialogFooter>
@@ -635,16 +755,78 @@ export default function ServicesPage() {
                 />
                 <Label htmlFor="edit_mis_en_avant">Service mis en avant</Label>
               </div>
+
+              {/* Images existantes */}
               <div className="space-y-2">
-                <Label htmlFor="edit_images">Images (URLs, séparées par des virgules)</Label>
-                <Textarea
-                  id="edit_images"
-                  placeholder="https://example.com/image1.jpg, https://example.com/image2.jpg"
-                  value={currentService.images.join(", ")}
-                  onChange={(e) =>
-                    setCurrentService({ ...currentService, images: e.target.value.split(",").map((url) => url.trim()) })
-                  }
-                />
+                <Label>Images existantes</Label>
+                {currentService.images.length > 0 ? (
+                  <div className="grid grid-cols-3 gap-2">
+                    {currentService.images.map((image, index) => (
+                      <div key={index} className="relative rounded-md overflow-hidden h-24">
+                        <img
+                          src={image || "/placeholder.svg"}
+                          alt={`Image ${index}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          onClick={() => removeExistingImage(index)}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <p className="text-sm text-gray-500">Aucune image existante</p>
+                )}
+              </div>
+
+              {/* Ajouter de nouvelles images */}
+              <div className="space-y-2">
+                <Label htmlFor="edit_images">Ajouter de nouvelles images</Label>
+                <div
+                  className="border-2 border-dashed border-gray-300 rounded-md p-4 text-center cursor-pointer hover:bg-gray-50 transition-colors"
+                  onClick={() => editImageInputRef.current?.click()}
+                >
+                  <Upload className="h-8 w-8 mx-auto text-gray-400" />
+                  <p className="mt-2 text-sm text-gray-500">Cliquez pour sélectionner des images</p>
+                  <p className="text-xs text-gray-400">JPG, PNG, GIF jusqu'à 5MB</p>
+                  <input
+                    type="file"
+                    ref={editImageInputRef}
+                    className="hidden"
+                    accept="image/*"
+                    multiple
+                    onChange={handleEditImageChange}
+                  />
+                </div>
+
+                {/* Aperçu des nouvelles images */}
+                {previewEditImages.length > 0 && (
+                  <div className="grid grid-cols-3 gap-2 mt-2">
+                    {previewEditImages.map((preview, index) => (
+                      <div key={index} className="relative rounded-md overflow-hidden h-24">
+                        <img
+                          src={preview || "/placeholder.svg"}
+                          alt={`Aperçu ${index}`}
+                          className="w-full h-full object-cover"
+                        />
+                        <button
+                          type="button"
+                          className="absolute top-1 right-1 bg-red-500 text-white rounded-full p-1 hover:bg-red-600"
+                          onClick={(e) => {
+                            e.stopPropagation()
+                            removeEditImage(index)
+                          }}
+                        >
+                          <X className="h-3 w-3" />
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -731,3 +913,4 @@ export default function ServicesPage() {
     </div>
   )
 }
+
