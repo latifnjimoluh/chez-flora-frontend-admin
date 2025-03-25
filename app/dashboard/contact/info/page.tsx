@@ -410,7 +410,7 @@ export default function ContactInfoPage() {
                   id="value"
                   value={newInfo.value}
                   onChange={(e) => setNewInfo({ ...newInfo, value: e.target.value })}
-                  placeholder="123 Rue des Fleurs\n75001 Paris, France"
+                  placeholder="123 Rue des Fleurs\n75001 Yaounde Cameroun"
                   className="min-h-[80px]"
                 />
               ) : (
